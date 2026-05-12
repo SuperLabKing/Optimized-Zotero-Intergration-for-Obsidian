@@ -233,6 +233,17 @@ const en: StringMap = {
   'settings.ifColorRules.textColor': 'Text Color',
   'settings.ifColorRules.delete': 'Delete',
   'settings.ifColorRules.preview': 'Preview',
+
+  // ── 标题跑马灯 ──
+  'settings.titleMarquee': 'Literature Title Display',
+  'settings.titleMarquee.desc':
+    'Apply a scrolling marquee animation to long titles in the Properties panel.',
+  'settings.titleMarquee.enable': 'Enable Title Marquee',
+  'settings.titleMarquee.enable.desc':
+    'When enabled, long titles will scroll horizontally to reveal the full text.',
+  'settings.titleMarquee.duration': 'Scroll Duration (seconds)',
+  'settings.titleMarquee.duration.desc':
+    'Time in seconds for one complete scroll cycle. Default: 15s.',
 };
 
 const zhCN: StringMap = {
@@ -432,6 +443,17 @@ const zhCN: StringMap = {
   'settings.ifColorRules.textColor': '字体色',
   'settings.ifColorRules.delete': '删除',
   'settings.ifColorRules.preview': '预览',
+
+  // ── 标题跑马灯 ──
+  'settings.titleMarquee': '文献标题显示',
+  'settings.titleMarquee.desc':
+    '为属性面板中的长标题添加水平滚动动画，完整展示标题文字。',
+  'settings.titleMarquee.enable': '启用标题跑马灯',
+  'settings.titleMarquee.enable.desc':
+    '开启后，长标题将自动水平滚动以展示完整文字。',
+  'settings.titleMarquee.duration': '滚动周期（秒）',
+  'settings.titleMarquee.duration.desc':
+    '完成一次完整滚动所需的秒数。默认：15 秒。',
 };
 
 // ─── 翻译函数 ─────────────────────────────────────────────────────

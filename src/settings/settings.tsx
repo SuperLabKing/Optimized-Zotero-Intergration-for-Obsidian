@@ -10,7 +10,10 @@ import {
   setLocale,
   t,
 } from '../locale/i18n';
-import { createIfRule } from '../bbt/styleManager';
+import {
+  createIfRule,
+  injectTitleMarqueeStyles,
+} from '../bbt/styleManager';
 import {
   CitationFormat,
   ExportFormat,
@@ -513,6 +516,7 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
       this.containerEl
     );
     this.renderIfColorRules();
+    this.renderTitleMarquee();
   }
 
   addCiteFormat = (format: CitationFormat) => {
@@ -687,11 +691,62 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
         );
 
       // 为输入框设置宽度
-      const inputs = ruleSetting.controlEl.querySelectorAll('input[type="text"], input[type="number"]');
+      const inputs = ruleSetting.controlEl.querySelectorAll(
+        'input[type="text"], input[type="number"]'
+      );
       inputs.forEach((inp: HTMLInputElement) => {
         inp.style.width = '80px';
       });
     });
+  }
+
+  renderTitleMarquee() {
+    const existing = this.containerEl.querySelector(
+      '#zotero-title-marquee-container'
+    );
+    if (existing) existing.remove();
+
+    const container = document.createElement('div');
+    container.id = 'zotero-title-marquee-container';
+    this.containerEl.appendChild(container);
+
+    new Setting(container)
+      .setName(t('settings.titleMarquee'))
+      .setDesc(t('settings.titleMarquee.desc'))
+      .setHeading();
+
+    new Setting(container)
+      .setName(t('settings.titleMarquee.enable'))
+      .setDesc(t('settings.titleMarquee.enable.desc'))
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.titleMarqueeEnabled || false)
+          .onChange((value) => {
+            this.plugin.settings.titleMarqueeEnabled = value;
+            this.debouncedSave();
+            injectTitleMarqueeStyles(
+              value,
+              this.plugin.settings.titleMarqueeDuration || 15
+            );
+          })
+      );
+
+    new Setting(container)
+      .setName(t('settings.titleMarquee.duration'))
+      .setDesc(t('settings.titleMarquee.duration.desc'))
+      .addSlider((slider) =>
+        slider
+          .setLimits(3, 60, 1)
+          .setValue(this.plugin.settings.titleMarqueeDuration || 15)
+          .setDynamicTooltip()
+          .onChange((value) => {
+            this.plugin.settings.titleMarqueeDuration = value;
+            this.debouncedSave();
+            if (this.plugin.settings.titleMarqueeEnabled) {
+              injectTitleMarqueeStyles(true, value);
+            }
+          })
+      );
   }
 
   debouncedSave() {

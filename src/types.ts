@@ -91,6 +91,8 @@ export interface ZoteroConnectorSettings {
   exportFormats: ExportFormat[];
   locale?: 'en' | 'zh-cn';
   ifColorRules?: IfColorRule[];
+  titleMarqueeEnabled?: boolean;
+  titleMarqueeDuration?: number;
   noteImportFolder: string;
   openNoteAfterImport: boolean;
   pdfExportImageDPI?: number;

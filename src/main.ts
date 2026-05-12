@@ -5,7 +5,12 @@ import { shellPath } from 'shell-path';
 import { DataExplorerView, viewType } from './DataExplorerView';
 import { LoadingModal } from './bbt/LoadingModal';
 import { getCAYW } from './bbt/cayw';
-import { injectIfStyles, removeIfStyles } from './bbt/styleManager';
+import {
+  injectIfStyles,
+  injectTitleMarqueeStyles,
+  removeIfStyles,
+  removeTitleMarqueeStyles,
+} from './bbt/styleManager';
 import { exportToMarkdown, renderCiteTemplate } from './bbt/export';
 import {
   filesFromNotes,
@@ -41,6 +46,8 @@ const DEFAULT_SETTINGS: ZoteroConnectorSettings = {
   exportFormats: [],
   citeSuggestTemplate: '[[{{citekey}}]]',
   ifColorRules: [],
+  titleMarqueeEnabled: false,
+  titleMarqueeDuration: 15,
   openNoteAfterImport: false,
   whichNotesToOpenAfterImport: 'first-imported-note',
 };
@@ -78,8 +85,17 @@ export default class ZoteroConnector extends Plugin {
 
     // 注入 IF 动态样式
     injectIfStyles(this.settings.ifColorRules || []);
+    // 注入标题跑马灯样式
+    injectTitleMarqueeStyles(
+      this.settings.titleMarqueeEnabled || false,
+      this.settings.titleMarqueeDuration || 15
+    );
     this.emitter.on('settingsUpdated', () => {
       injectIfStyles(this.settings.ifColorRules || []);
+      injectTitleMarqueeStyles(
+        this.settings.titleMarqueeEnabled || false,
+        this.settings.titleMarqueeDuration || 15
+      );
     });
 
     this.updatePDFUtility();
@@ -163,6 +179,7 @@ export default class ZoteroConnector extends Plugin {
     });
 
     removeIfStyles();
+    removeTitleMarqueeStyles();
     this.app.workspace.detachLeavesOfType(viewType);
   }
 
