@@ -1,7 +1,7 @@
 import { Notice, request } from 'obsidian';
 
 import { t } from '../locale/i18n';
-import { focusZotero, getCurrentWindow } from '../helpers';
+import { bringObsidianToFront, getCurrentWindow } from '../helpers';
 import { CitationFormat, DatabaseWithPort } from '../types';
 import { LoadingModal } from './LoadingModal';
 import { defaultHeaders, getPort } from './helpers';
@@ -100,8 +100,6 @@ export async function getCAYW(
     }
 
     await ZQueue.wait(qid);
-    win.setAlwaysOnTop(true, 'floating');
-    await focusZotero(database.database);
     const res = await request({
       method: 'GET',
       url: `http://127.0.0.1:${getPort(
@@ -111,16 +109,12 @@ export async function getCAYW(
       headers: defaultHeaders,
     });
 
-    win.setAlwaysOnTop(false);
-    win.show();
-    win.focus();
+    bringObsidianToFront(win);
     modal.close();
     ZQueue.end(qid);
     return res;
   } catch (e) {
-    win.setAlwaysOnTop(false);
-    win.show();
-    win.focus();
+    bringObsidianToFront(win);
     console.error(e);
     modal.close();
     new Notice(`${t('notice.citationError')} ${e.message}`, 10000);
@@ -170,8 +164,6 @@ export async function getCAYWJSON(database: DatabaseWithPort) {
   const qid = Symbol();
   try {
     await ZQueue.wait(qid);
-    win.setAlwaysOnTop(true, 'floating');
-    await focusZotero(database.database);
     const res = await request({
       method: 'GET',
       url: `http://127.0.0.1:${getPort(
@@ -181,9 +173,7 @@ export async function getCAYWJSON(database: DatabaseWithPort) {
       headers: defaultHeaders,
     });
 
-    win.setAlwaysOnTop(false);
-    win.show();
-    win.focus();
+    bringObsidianToFront(win);
 
     modal.close();
     ZQueue.end(qid);
@@ -193,9 +183,7 @@ export async function getCAYWJSON(database: DatabaseWithPort) {
       return null;
     }
   } catch (e) {
-    win.setAlwaysOnTop(false);
-    win.show();
-    win.focus();
+    bringObsidianToFront(win);
     console.error(e);
     modal.close();
     new Notice(`${t('notice.citeKeyError')} ${e.message}`, 10000);
