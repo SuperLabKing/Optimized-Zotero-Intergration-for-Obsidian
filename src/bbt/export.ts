@@ -27,6 +27,7 @@ import {
   getItemJSONFromCiteKeys,
   getItemJSONFromRelations,
 } from './jsonRPC';
+import { mergeFrontmatterContent } from './frontmatter';
 import { PersistExtension, renderTemplate } from './template.env';
 import {
   appendExportDate,
@@ -811,7 +812,10 @@ export async function exportToMarkdown(
       if (!rendered) continue;
 
       if (file) {
-        await app.vault.modify(file, rendered);
+        // Merge frontmatter: preserve user-added YAML keys from the existing
+        // note while updating Zotero-managed keys with the new rendered values.
+        const merged = mergeFrontmatterContent(fileContent, rendered);
+        await app.vault.modify(file, merged);
       } else {
         await mkMDDir(markdownPath);
         await app.vault.create(markdownPath, rendered);

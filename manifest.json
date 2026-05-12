@@ -1,10 +1,10 @@
 {
-	"id": "obsidian-zotero-desktop-connector",
-	"name": "Zotero Integration",
-	"version": "3.2.1",
+	"id": "optimized-zotero-integration",
+	"name": "Optimized Zotero Integration",
+	"version": "1.0.0",
 	"minAppVersion": "1.1.1",
-	"description": "Insert and import citations, bibliographies, notes, and PDF annotations from Zotero.",
-	"author": "mgmeyers",
-	"authorUrl": "https://github.com/mgmeyers/obsidian-zotero-integration",
+	"description": "基于 mgmeyers/obsidian-zotero-integration 优化：支持 YAML Frontmatter 属性合并，更新笔记时保留用户手动添加的自定义属性。",
+	"author": "SuperLabKing",
+	"authorUrl": "https://github.com/SuperLabKing/Optimized-Zotero-Intergration-for-Obsidian",
 	"isDesktopOnly": true
 }
