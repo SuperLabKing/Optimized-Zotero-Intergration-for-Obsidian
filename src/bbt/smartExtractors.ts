@@ -1,5 +1,9 @@
 import { extractImpactFactor } from './styleManager';
 import { SmartFieldOption } from '../types';
+import {
+  extractStatusFromTags,
+  processItemRating,
+} from './ZoteroDataProcessor';
 
 // ── 字段选项定义 ──
 
@@ -13,8 +17,8 @@ export const SMART_FIELD_OPTIONS: SmartFieldOption[] = [
   { value: 'collections_path', label: '文库分类' },
   { value: 'impact_factor_smart', label: '影响因子' },
   { value: 'type_tags_smart', label: '文献类型' },
-  { value: 'status_tags_smart', label: '阅读状态' },
-  { value: 'priority_tags_smart', label: '星标评级' },
+  { value: 'status_tags_smart', label: '阅读状态 (/)' },
+  { value: 'priority_tags_smart', label: '星标评级 (动态双轨)' },
   { value: 'extra_translation', label: '附加信息' },
 ];
 
@@ -104,35 +108,32 @@ function extractTypeTagsSmart(item: any): string[] {
   return result;
 }
 
+/**
+ * 提取阅读状态标签并翻译为三字中文短语。
+ * 使用 ZoteroDataProcessor 的统一状态翻译逻辑。
+ * 返回列表类型，如 ["待阅读"]、["阅读中"]、["已完成"]。
+ */
 function extractStatusTagsSmart(item: any): string[] {
-  if (!item.tags || !Array.isArray(item.tags)) return [];
-  const statusMarkers = ['/unread', '/reading', '/done'];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const t of item.tags) {
-    const tag = (t.tag || t).toString();
-    const matched = statusMarkers.find((m) => tag.includes(m));
-    if (matched && !seen.has(tag)) {
-      seen.add(tag);
-      const cleaned = tag.replace(/\//g, '');
-      if (cleaned) result.push(cleaned);
-    }
-  }
-  return result;
+  const status = extractStatusFromTags(item.tags);
+  return status ? [status] : [];
 }
 
+/**
+ * 提取星标优先级 - 动态双轨语义评价系统。
+ *
+ * 废弃旧的 Emoji 标签提取逻辑，改用 ZoteroDataProcessor
+ * 的状态感知双轨算法，输出格式：
+ *   [5位Unicode星标串] ([语义评语])
+ *
+ * 示例：
+ *   Zotero评2分，状态unread  → ★★☆☆☆ (值得关注)
+ *   Zotero评5分，状态reading → ★★★☆☆ (重点精读)
+ *   Zotero评4分，状态done    → ★★★★☆ (高度相关)
+ *   Zotero评5分，状态done    → ★★★★★ (关键研究)
+ */
 function extractPriorityTagsSmart(item: any): string[] {
-  if (!item.tags || !Array.isArray(item.tags)) return [];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const t of item.tags) {
-    const tag = (t.tag || t).toString();
-    if (/[⭐★🌟✨]/.test(tag) && !seen.has(tag)) {
-      seen.add(tag);
-      result.push(tag);
-    }
-  }
-  return result;
+  const rating = processItemRating(item);
+  return rating ? [rating] : [];
 }
 
 function extractJournalFull(item: any): string {
