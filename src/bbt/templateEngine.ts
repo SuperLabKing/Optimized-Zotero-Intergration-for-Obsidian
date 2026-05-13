@@ -1,0 +1,115 @@
+import { extractSmartField } from './smartExtractors';
+import { IfColorRule, PropertyMapping } from '../types';
+import { matchIfRule } from './styleManager';
+
+// ── Record 构建 ──
+
+export function buildPropertyRecord(
+  item: any,
+  propertyMappings: PropertyMapping[],
+  ifColorRules?: IfColorRule[]
+): Record<string, any> {
+  const record: Record<string, any> = {};
+  const cssclasses: string[] = [];
+
+  for (const mapping of propertyMappings) {
+    if (!mapping.zoteroField || !mapping.obsidianKey) continue;
+
+    const value = extractSmartField(mapping.zoteroField, item);
+
+    // 跳过无效值
+    if (value === null || value === undefined || value === '') continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+
+    // IF 纯数字存储，颜色规则匹配；小数尾缀 .0 由 styleManager 在视图层注入
+    if (mapping.zoteroField === 'impact_factor_smart' && typeof value === 'number') {
+      record[mapping.obsidianKey] = value;
+      const matchedRule = matchIfRule(value, ifColorRules || []);
+      if (matchedRule) {
+        cssclasses.push(matchedRule.className);
+      }
+      continue;
+    }
+
+    record[mapping.obsidianKey] = value;
+  }
+
+  if (cssclasses.length > 0) {
+    record.cssclasses = cssclasses;
+  }
+
+  return record;
+}
+
+// ── YAML 序列化 ──
+
+function yamlEscape(value: string): string {
+  if (!value) return value;
+  // 含双引号或特殊字符（含零宽空格 \u200B）→ 单引号包裹
+  if (value.includes('"') || value.includes(':') || value.includes('#') ||
+      value.includes('{') || value.includes('}') || value.includes('[') ||
+      value.includes(']') || value.includes('|') || value.includes('>') ||
+      value.includes('&') || value.includes('*') || value.includes('!') ||
+      value.startsWith(' ') || value.endsWith(' ') || value.includes('@')) {
+    // 单引号内需要转义单引号为两个单引号
+    const escaped = value.replace(/'/g, "''");
+    return `'${escaped}'`;
+  }
+  // 纯数字字符串需要引号
+  if (/^\d+\.?\d*$/.test(value.trim())) {
+    return `'${value}'`;
+  }
+  return value;
+}
+
+export function recordToYaml(record: Record<string, any>): string {
+  const lines: string[] = ['---'];
+
+  for (const [key, value] of Object.entries(record)) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+
+    if (Array.isArray(value)) {
+      const items = value.map((v: any) => {
+        if (typeof v === 'number') return v.toString();
+        return yamlEscape(String(v));
+      });
+      lines.push(`${key}: [${items.join(', ')}]`);
+    } else if (typeof value === 'number') {
+      const formatted = Number.isInteger(value) ? value.toFixed(1) : value.toString();
+      lines.push(`${key}: ${formatted}`);
+    } else {
+      lines.push(`${key}: ${yamlEscape(String(value))}`);
+    }
+  }
+
+  lines.push('---');
+  return lines.join('\n');
+}
+
+// ── 正文模板变量替换 ──
+
+export function renderBodyTemplate(
+  template: string,
+  data: Record<string, any>
+): string {
+  if (!template) return '';
+
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+    const value = data[key];
+    if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) return value.join(', ');
+    return String(value);
+  });
+}
+
+// ── 组装完整 Markdown ──
+
+export function assembleMarkdown(
+  record: Record<string, any>,
+  bodyTemplate: string
+): string {
+  const yaml = recordToYaml(record);
+  const body = renderBodyTemplate(bodyTemplate, record);
+  return yaml + '\n' + body;
+}

@@ -177,6 +177,7 @@ const en: StringMap = {
   'command.insertNotes': 'Insert notes into current document',
   'command.importNotes': 'Import notes',
   'command.dataExplorer': 'Data explorer',
+  'command.quickImport': 'Quick Import (Visual Mappings)',
 
   // ── 模态框 / 提示 ──
   'modal.fetchingData': 'Fetching data from Zotero...',
@@ -244,6 +245,23 @@ const en: StringMap = {
   'settings.titleMarquee.duration': 'Scroll Duration (seconds)',
   'settings.titleMarquee.duration.desc':
     'Time in seconds for one complete scroll cycle. Default: 15s.',
+
+  // ── 多 Tab 设置面板 ──
+  'settings.tab.general': 'General',
+  'settings.tab.beautify': 'Beautify',
+  'settings.tab.template': 'Template',
+
+  // ── Template Tab ──
+  'settings.template.mappings': 'Property Mappings',
+  'settings.template.mappings.desc':
+    'Map Zotero fields to Obsidian property keys. Choose a Zotero field and enter the Obsidian property name.',
+  'settings.template.addMapping': 'Add Mapping',
+  'settings.template.zoteroField': 'Zotero Field',
+  'settings.template.obsidianKey': 'Property Name',
+  'settings.template.bodyTemplate': 'Body Template',
+  'settings.template.bodyTemplate.desc':
+    'Markdown body content. Use {{key}} as placeholders — they will be replaced by the corresponding property values.',
+  'settings.template.deleteMapping': 'Delete',
 };
 
 const zhCN: StringMap = {
@@ -390,6 +408,7 @@ const zhCN: StringMap = {
   'command.insertNotes': '将笔记插入当前文档',
   'command.importNotes': '导入笔记',
   'command.dataExplorer': '数据浏览器',
+  'command.quickImport': '快速导入（可视化映射）',
 
   // ── 模态框 / 提示 ──
   'modal.fetchingData': '正在从 Zotero 获取数据...',
@@ -454,6 +473,23 @@ const zhCN: StringMap = {
   'settings.titleMarquee.duration': '滚动周期（秒）',
   'settings.titleMarquee.duration.desc':
     '完成一次完整滚动所需的秒数。默认：15 秒。',
+
+  // ── 多 Tab 设置面板 ──
+  'settings.tab.general': '常规',
+  'settings.tab.beautify': '美化',
+  'settings.tab.template': '模板',
+
+  // ── Template Tab ──
+  'settings.template.mappings': '属性映射',
+  'settings.template.mappings.desc':
+    '将 Zotero 字段映射到 Obsidian 属性键。选择一个 Zotero 字段并输入 Obsidian 属性名称。',
+  'settings.template.addMapping': '添加映射',
+  'settings.template.zoteroField': 'Zotero 字段',
+  'settings.template.obsidianKey': '属性名称',
+  'settings.template.bodyTemplate': '正文模板',
+  'settings.template.bodyTemplate.desc':
+    '正文 Markdown 内容。使用 {{key}} 作为占位符——它们会被对应属性值替换。',
+  'settings.template.deleteMapping': '删除',
 };
 
 // ─── 翻译函数 ─────────────────────────────────────────────────────

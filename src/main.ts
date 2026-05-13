@@ -1,15 +1,13 @@
 import Fuse from 'fuse.js';
-import { EditableFileView, Events, Plugin, TFile } from 'obsidian';
+import { EditableFileView, Events, Notice, Plugin, TFile } from 'obsidian';
 import { shellPath } from 'shell-path';
 
 import { DataExplorerView, viewType } from './DataExplorerView';
 import { LoadingModal } from './bbt/LoadingModal';
 import { getCAYW } from './bbt/cayw';
 import {
-  injectIfStyles,
-  injectTitleMarqueeStyles,
-  removeIfStyles,
-  removeTitleMarqueeStyles,
+  injectBeautifyStyles,
+  removeBeautifyStyles,
 } from './bbt/styleManager';
 import { exportToMarkdown, renderCiteTemplate } from './bbt/export';
 import {
@@ -48,6 +46,13 @@ const DEFAULT_SETTINGS: ZoteroConnectorSettings = {
   ifColorRules: [],
   titleMarqueeEnabled: false,
   titleMarqueeDuration: 15,
+  propertyMappings: [
+    { zoteroField: 'title_smart', obsidianKey: '标题' },
+    { zoteroField: 'authors_smart', obsidianKey: '作者' },
+    { zoteroField: 'year', obsidianKey: '年份' },
+    { zoteroField: 'journal', obsidianKey: '出版物' },
+  ],
+  bodyTemplate: '## Abstract\n\n{{abstract}}\n\n## Notes\n\n{{markdownNotes}}',
   openNoteAfterImport: false,
   whichNotesToOpenAfterImport: 'first-imported-note',
 };
@@ -83,16 +88,17 @@ export default class ZoteroConnector extends Plugin {
     setLocale(this.settings.locale || 'en');
     this.emitter = new Events();
 
-    // 注入 IF 动态样式
-    injectIfStyles(this.settings.ifColorRules || []);
-    // 注入标题跑马灯样式
-    injectTitleMarqueeStyles(
+    // 统一注入美化样式（IF 颜色 + 标题跑马灯，动态属性名）
+    injectBeautifyStyles(
+      this.settings.propertyMappings || [],
+      this.settings.ifColorRules || [],
       this.settings.titleMarqueeEnabled || false,
       this.settings.titleMarqueeDuration || 15
     );
     this.emitter.on('settingsUpdated', () => {
-      injectIfStyles(this.settings.ifColorRules || []);
-      injectTitleMarqueeStyles(
+      injectBeautifyStyles(
+        this.settings.propertyMappings || [],
+        this.settings.ifColorRules || [],
         this.settings.titleMarqueeEnabled || false,
         this.settings.titleMarqueeDuration || 15
       );
@@ -149,6 +155,54 @@ export default class ZoteroConnector extends Plugin {
     });
 
     this.addCommand({
+      id: 'zdc-quick-import',
+      name: t('command.quickImport'),
+      callback: async () => {
+        const database = {
+          database: this.settings.database,
+          port: this.settings.port,
+        };
+        const plainExportFormat: ExportFormat = {
+          name: '__quick_import__',
+          outputPathTemplate: '{{citekey}}.md',
+          imageOutputPathTemplate: '{{citekey}}/',
+          imageBaseNameTemplate: 'image',
+        };
+        const progressNotice = new Notice('', 0);
+        try {
+          const paths = await exportToMarkdown(
+            { settings: this.settings, database, exportFormat: plainExportFormat },
+            undefined,
+            ({ macro, micro }) => {
+              progressNotice.noticeEl.empty();
+              progressNotice.noticeEl.createSpan({ text: macro });
+              if (micro) {
+                progressNotice.noticeEl.createEl('br');
+                const microEl = progressNotice.noticeEl.createSpan({
+                  text: micro,
+                });
+                microEl.style.fontSize = '0.85em';
+                microEl.style.opacity = '0.8';
+              }
+            }
+          );
+          progressNotice.noticeEl.empty();
+          progressNotice.noticeEl.createSpan({
+            text: `✅ 导入完成：${paths.length} 篇文献`,
+          });
+          setTimeout(() => progressNotice.hide(), 3000);
+          this.openNotes(paths);
+        } catch (e) {
+          progressNotice.noticeEl.empty();
+          progressNotice.noticeEl.createSpan({
+            text: `❌ 导入失败：${e instanceof Error ? e.message : '未知错误'}`,
+          });
+          setTimeout(() => progressNotice.hide(), 5000);
+        }
+      },
+    });
+
+    this.addCommand({
       id: 'show-zotero-debug-view',
       name: t('command.dataExplorer'),
       callback: () => {
@@ -178,8 +232,7 @@ export default class ZoteroConnector extends Plugin {
       this.removeExportCommand(f);
     });
 
-    removeIfStyles();
-    removeTitleMarqueeStyles();
+    removeBeautifyStyles();
     this.app.workspace.detachLeavesOfType(viewType);
   }
 
@@ -227,13 +280,37 @@ export default class ZoteroConnector extends Plugin {
           database: this.settings.database,
           port: this.settings.port,
         };
-        this.openNotes(
-          await exportToMarkdown({
-            settings: this.settings,
-            database,
-            exportFormat: format,
-          })
-        );
+        const progressNotice = new Notice('', 0);
+        try {
+          const paths = await exportToMarkdown(
+            { settings: this.settings, database, exportFormat: format },
+            undefined,
+            ({ macro, micro }) => {
+              progressNotice.noticeEl.empty();
+              progressNotice.noticeEl.createSpan({ text: macro });
+              if (micro) {
+                progressNotice.noticeEl.createEl('br');
+                const microEl = progressNotice.noticeEl.createSpan({
+                  text: micro,
+                });
+                microEl.style.fontSize = '0.85em';
+                microEl.style.opacity = '0.8';
+              }
+            }
+          );
+          progressNotice.noticeEl.empty();
+          progressNotice.noticeEl.createSpan({
+            text: `✅ 导入完成：${paths.length} 篇文献`,
+          });
+          setTimeout(() => progressNotice.hide(), 3000);
+          this.openNotes(paths);
+        } catch (e) {
+          progressNotice.noticeEl.empty();
+          progressNotice.noticeEl.createSpan({
+            text: `❌ 导入失败：${e instanceof Error ? e.message : '未知错误'}`,
+          });
+          setTimeout(() => progressNotice.hide(), 5000);
+        }
       },
     });
   }

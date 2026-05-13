@@ -8,6 +8,9 @@ import {
   DatabaseWithPort,
   ExportToMarkdownParams,
   IfColorRule,
+  ImportProgress,
+  ProgressCallback,
+  PropertyMapping,
   RenderCiteTemplateParams,
   ZoteroConnectorSettings,
 } from '../types';
@@ -21,6 +24,7 @@ import {
   mkMDDir,
   sanitizeFilePath,
 } from './helpers';
+import { assembleMarkdown, buildPropertyRecord } from './templateEngine';
 import {
   getAttachmentsFromCiteKey,
   getBibFromCiteKey,
@@ -399,12 +403,19 @@ export async function renderTemplates(
   params: ExportToMarkdownParams,
   templateData: Record<any, any>,
   existingAnnotations: string,
+  settings: ZoteroConnectorSettings,
   shouldThrow?: boolean
 ) {
   const { template, headerTemplate, annotationTemplate, footerTemplate } =
     await getTemplates(params);
 
+  // v2.0 新引擎：无 Nunjucks 模板但配置了属性映射时，使用可视化映射生成 YAML
   if (!template && !headerTemplate && !annotationTemplate && !footerTemplate) {
+    if (settings.propertyMappings?.length) {
+      const record = templateData._propertyRecord || {};
+      const rendered = assembleMarkdown(record, settings.bodyTemplate || '');
+      return rendered;
+    }
     throw new Error(
       `No templates found for export ${params.exportFormat.name}`
     );
@@ -582,7 +593,8 @@ async function getTemplateData(
   markdownPath: string,
   item: any,
   lastImportDate: moment.Moment,
-  ifColorRules?: IfColorRule[]
+  ifColorRules?: IfColorRule[],
+  propertyMappings?: PropertyMapping[]
 ) {
   const firstAnnots = item.attachments.find(
     (a: any) => a.annotations?.length
@@ -603,17 +615,27 @@ async function getTemplateData(
     }
   }
 
+  // 构建属性映射 Record（v2.0 新引擎）
+  if (propertyMappings?.length) {
+    item._propertyRecord = buildPropertyRecord(item, propertyMappings, ifColorRules);
+  }
+
   return await applyBasicTemplates(markdownPath, item);
 }
 
 export async function exportToMarkdown(
   params: ExportToMarkdownParams,
-  explicitCiteKeys?: CiteKey[]
+  explicitCiteKeys?: CiteKey[],
+  onProgress?: ProgressCallback
 ): Promise<string[]> {
   const importDate = moment();
   const { database, exportFormat, settings } = params;
   const sourcePath = getATemplatePath(params);
   const canExtract = doesEXEExist();
+
+  const emit = (macro: string, micro?: string) => {
+    if (onProgress) onProgress({ macro, micro });
+  };
 
   const citeKeys = explicitCiteKeys
     ? explicitCiteKeys
@@ -634,7 +656,13 @@ export async function exportToMarkdown(
   // Further down below, when the Markdown file path has been sanitized, we associate the path to the key.
   const createdOrUpdatedMarkdownFiles: string[] = [];
 
-  for (const item of itemData) {
+  const total = itemData.length;
+  for (let idx = 0; idx < total; idx++) {
+    const item = itemData[idx];
+    emit(
+      `📦 正在处理 ${idx + 1}/${total} 篇文献...`,
+      '⏳ 获取元数据与引用...'
+    );
     await processItem(item, importDate, database, exportFormat.cslStyle);
   }
 
@@ -692,6 +720,10 @@ export async function exportToMarkdown(
   for (let i = 0, len = itemData.length; i < len; i++) {
     const item = itemData[i];
     const attachments = item.attachments as any[];
+    emit(
+      `📦 正在处理 ${i + 1}/${len} 篇文献...`,
+      `⏳ 检查附件与 PDF 批注...`
+    );
     const attachmentData = await getAttachmentData(item, database);
 
     if (!attachments.length) {
@@ -766,6 +798,10 @@ export async function exportToMarkdown(
       }
 
       if (isPDF && canExtract) {
+        emit(
+          `📦 正在处理 ${i + 1}/${len} 篇文献...`,
+          '⏳ 正在解析 PDF 高亮与批注...'
+        );
         try {
           const res = await extractAnnotations(
             attachmentPath,
@@ -807,7 +843,14 @@ export async function exportToMarkdown(
     }
   }
 
+  let renderIdx = 0;
+  const renderTotal = toRender.size;
   for (const [markdownPath, data] of toRender.entries()) {
+    renderIdx++;
+    emit(
+      `📦 正在生成文件 ${renderIdx}/${renderTotal}...`,
+      '⏳ 组装 Markdown 与 YAML 元数据...'
+    );
     try {
       const { existingAnnotations, file, fileContent, item, lastImportDate } =
         data;
@@ -816,12 +859,14 @@ export async function exportToMarkdown(
         markdownPath,
         item,
         lastImportDate,
-        settings.ifColorRules
+        settings.ifColorRules,
+        settings.propertyMappings
       );
       const rendered = await renderTemplates(
         params,
         PersistExtension.prepareTemplateData(templateData, fileContent),
-        existingAnnotations
+        existingAnnotations,
+        settings
       );
 
       if (!rendered) continue;

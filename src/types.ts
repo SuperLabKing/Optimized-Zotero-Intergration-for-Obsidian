@@ -80,6 +80,16 @@ export interface IfColorRule {
   className: string;
 }
 
+export interface PropertyMapping {
+  zoteroField: string;
+  obsidianKey: string;
+}
+
+export interface SmartFieldOption {
+  value: string;
+  label: string;
+}
+
 export interface ZoteroConnectorSettings {
   citeFormats: CitationFormat[];
   citeSuggestTemplate?: string;
@@ -93,6 +103,8 @@ export interface ZoteroConnectorSettings {
   ifColorRules?: IfColorRule[];
   titleMarqueeEnabled?: boolean;
   titleMarqueeDuration?: number;
+  propertyMappings?: PropertyMapping[];
+  bodyTemplate?: string;
   noteImportFolder: string;
   openNoteAfterImport: boolean;
   pdfExportImageDPI?: number;
@@ -106,6 +118,13 @@ export interface ZoteroConnectorSettings {
   shouldConcat?: boolean;
   whichNotesToOpenAfterImport: NotesToOpenAfterImport;
 }
+
+export interface ImportProgress {
+  macro: string;
+  micro?: string;
+}
+
+export type ProgressCallback = (progress: ImportProgress) => void;
 
 export interface CiteKeyExport {
   libraryID: number;

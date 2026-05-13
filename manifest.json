@@ -1,9 +1,9 @@
 {
 	"id": "optimized-zotero-integration",
 	"name": "Optimized Zotero Integration",
-	"version": "1.2.0",
+	"version": "2.0.0",
 	"minAppVersion": "1.1.1",
-	"description": "基于 mgmeyers/obsidian-zotero-integration 优化：支持 YAML Frontmatter 属性合并，更新笔记时保留用户手动添加的自定义属性。",
+	"description": "v2.0.0: 多Tab设置面板 + 可视化属性映射 + 智能数据清洗 + IF动态颜色 + 标题跑马灯 + 统一CSS渲染引擎",
 	"author": "SuperLabKing",
 	"authorUrl": "https://github.com/SuperLabKing/Optimized-Zotero-Intergration-for-Obsidian",
 	"isDesktopOnly": true
