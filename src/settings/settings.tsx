@@ -636,11 +636,14 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
 
   private _renderTemplateTab(container: HTMLElement) {
     container.empty();
-    this._renderPropertyMappings(container);
     this._renderBodyTemplate(container);
+    this._renderPropertyMappings(container);
   }
 
   private _renderPropertyMappings(container: HTMLElement) {
+    // 保存滚动位置
+    const scrollTop = container.scrollTop;
+
     const existing = container.querySelector('#zotero-property-mappings-container');
     if (existing) existing.remove();
 
@@ -657,6 +660,9 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
         .setButtonText(t('settings.template.addMapping'))
         .setCta()
         .onClick(() => {
+          // 保存当前滚动位置
+          const currentScrollTop = container.scrollTop;
+
           const mappings = [...(this.plugin.settings.propertyMappings || [])];
           const used = new Set(mappings.map((m) => m.zoteroField));
           const next = SMART_FIELD_OPTIONS.find((opt) => !used.has(opt.value));
@@ -667,6 +673,11 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
           this.plugin.settings.propertyMappings = mappings;
           this.debouncedSave();
           this._renderPropertyMappings(container);
+
+          // 恢复滚动位置
+          requestAnimationFrame(() => {
+            container.scrollTop = currentScrollTop;
+          });
         })
     );
 
@@ -688,28 +699,86 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
         this.debouncedSave();
       };
 
-      new Setting(wrapper)
+      const settingItem = new Setting(wrapper);
+
+      // 添加拖拽按钮（六个点）在最左侧
+      settingItem.addExtraButton((btn) => {
+        btn.setIcon('grip-vertical').setTooltip('拖拽排序');
+        const handle = btn.extraSettingsEl;
+        handle.addClass('zt-drag-handle');
+        handle.style.cursor = 'grab';
+        handle.draggable = true;
+
+        // 拖拽开始
+        handle.addEventListener('dragstart', (e: DragEvent) => {
+          e.dataTransfer!.effectAllowed = 'move';
+          e.dataTransfer!.setData('text/plain', i.toString());
+          settingItem.settingEl.addClass('is-dragging');
+          handle.style.cursor = 'grabbing';
+        });
+
+        // 拖拽结束
+        handle.addEventListener('dragend', () => {
+          settingItem.settingEl.removeClass('is-dragging');
+          handle.style.cursor = 'grab';
+        });
+      });
+
+      // 设置拖拽目标事件
+      settingItem.settingEl.addEventListener('dragover', (e: DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = 'move';
+        // 添加拖拽悬停样式
+        settingItem.settingEl.addClass('zt-drag-over');
+      });
+
+      settingItem.settingEl.addEventListener('dragleave', () => {
+        settingItem.settingEl.removeClass('zt-drag-over');
+      });
+
+      settingItem.settingEl.addEventListener('drop', (e: DragEvent) => {
+        e.preventDefault();
+        settingItem.settingEl.removeClass('zt-drag-over');
+
+        const fromIndex = parseInt(e.dataTransfer!.getData('text/plain'));
+        const toIndex = i;
+
+        if (fromIndex !== toIndex) {
+          const mappings = [...(this.plugin.settings.propertyMappings || [])];
+          const [moved] = mappings.splice(fromIndex, 1);
+          mappings.splice(toIndex, 0, moved);
+          this.plugin.settings.propertyMappings = mappings;
+          this.debouncedSave();
+          this._renderPropertyMappings(container);
+        }
+      });
+
+      settingItem
         .addDropdown((dropdown) => {
           availableOptions.forEach((opt) => dropdown.addOption(opt.value, opt.label));
           dropdown.setValue(mapping.zoteroField).onChange((value) => {
             updateMapping({ zoteroField: value });
             this._renderPropertyMappings(container);
           });
-          dropdown.selectEl.style.maxWidth = '200px';
+          // 固定宽度，不使用 maxWidth
+          dropdown.selectEl.style.width = '160px';
+          dropdown.selectEl.style.flexShrink = '0';
         })
         .addText((text) => {
           text
             .setValue(mapping.obsidianKey)
             .setPlaceholder(t('settings.template.obsidianKey'))
             .onChange((value) => updateMapping({ obsidianKey: value }));
-          text.inputEl.style.flexGrow = '1';
+          // 使用 flex: 1 让输入框充分占据剩余空间
+          text.inputEl.style.flex = '1';
+          text.inputEl.style.minWidth = '0';
         })
         .addExtraButton((btn) =>
           btn
             .setIcon('trash')
             .setTooltip(t('settings.template.deleteMapping'))
             .onClick(() => {
-              const scrollContainer = this.containerEl;
+              const scrollContainer = container.parentElement || container;
               const scrollTop = scrollContainer.scrollTop;
 
               const updated = [...(this.plugin.settings.propertyMappings || [])];
@@ -718,7 +787,10 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
               this.debouncedSave();
               this._renderPropertyMappings(container);
 
-              scrollContainer.scrollTop = scrollTop;
+              // 恢复滚动位置
+              requestAnimationFrame(() => {
+                scrollContainer.scrollTop = scrollTop;
+              });
             })
         );
     });

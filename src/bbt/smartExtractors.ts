@@ -6,6 +6,9 @@ import { SmartFieldOption } from '../types';
 export const SMART_FIELD_OPTIONS: SmartFieldOption[] = [
   { value: 'title_smart', label: '文献标题' },
   { value: 'authors_smart', label: '文献作者' },
+  { value: 'journal_full', label: '期刊全称' },
+  { value: 'journal_abbr', label: '期刊简称' },
+  { value: 'journal_smart', label: '期刊智能' },
   { value: 'year', label: '发表年份' },
   { value: 'collections_path', label: '文库分类' },
   { value: 'impact_factor_smart', label: '影响因子' },
@@ -132,6 +135,26 @@ function extractPriorityTagsSmart(item: any): string[] {
   return result;
 }
 
+function extractJournalFull(item: any): string {
+  return item.publicationTitle || item.repository || item.institution || '';
+}
+
+function extractJournalAbbr(item: any): string {
+  return item.journalAbbreviation || '';
+}
+
+function extractJournalSmart(item: any): string {
+  // 优先使用简称，否则使用全称，兼容预印本
+  const abbr = item.journalAbbreviation;
+  const full = item.publicationTitle;
+
+  if (abbr) return abbr;
+  if (full) return full;
+
+  // 预印本平台
+  return item.repository || item.institution || '';
+}
+
 function extractExtraTranslation(item: any): string | null {
   const extra = item.extra || '';
   const match = extra.match(/titleTranslation:\s*(.*)/);
@@ -143,6 +166,9 @@ function extractExtraTranslation(item: any): string | null {
 const extractorMap: Record<string, (item: any) => any> = {
   title_smart: extractTitleSmart,
   authors_smart: extractAuthorsSmart,
+  journal_full: extractJournalFull,
+  journal_abbr: extractJournalAbbr,
+  journal_smart: extractJournalSmart,
   year: extractYear,
   collections_path: extractCollectionsPath,
   impact_factor_smart: extractImpactFactorSmart,

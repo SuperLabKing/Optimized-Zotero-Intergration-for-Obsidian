@@ -173,7 +173,11 @@ export async function getCAYWJSON(database: DatabaseWithPort) {
       headers: defaultHeaders,
     });
 
-    bringObsidianToFront(win);
+    // 延迟将 Obsidian 拉回前台，确保 Zotero 弹窗有足够时间显示
+    // 特别是首次启动时，Zotero 需要更多时间初始化弹窗
+    setTimeout(() => {
+      bringObsidianToFront(win);
+    }, 500);
 
     modal.close();
     ZQueue.end(qid);
@@ -183,7 +187,10 @@ export async function getCAYWJSON(database: DatabaseWithPort) {
       return null;
     }
   } catch (e) {
-    bringObsidianToFront(win);
+    // 错误情况下也延迟拉回，避免遮挡可能的错误提示
+    setTimeout(() => {
+      bringObsidianToFront(win);
+    }, 500);
     console.error(e);
     modal.close();
     new Notice(`${t('notice.citeKeyError')} ${e.message}`, 10000);

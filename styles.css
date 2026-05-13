@@ -263,8 +263,57 @@
     border-bottom: none;
 }
 
-/* 拖拽状态（预留） */
+/* 拖拽状态 */
 .zt-setting-card-group .setting-item.is-dragging {
-    opacity: 0.4;
+    opacity: 0.5;
     background-color: var(--background-secondary);
+    transform: scale(0.98);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* 拖拽悬停目标 */
+.zt-setting-card-group .setting-item.zt-drag-over {
+    border-top: 2px solid var(--interactive-accent);
+    padding-top: 16px;
+    transition: border-top 0.2s ease, padding-top 0.2s ease;
+}
+
+/* 拖拽动画 */
+.zt-setting-card-group .setting-item {
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* 拖拽按钮样式 */
+.zt-drag-handle {
+    cursor: grab;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.zt-drag-handle:hover {
+    opacity: 1;
+}
+
+.zt-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* 优化属性映射布局 - 让内容平铺 */
+.zt-setting-card-group .setting-item-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* 确保拖拽按钮在最左侧 */
+.zt-setting-card-group .setting-item-info {
+    display: none;
+}
+
+.zt-setting-card-group .setting-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }

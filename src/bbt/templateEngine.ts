@@ -10,6 +10,9 @@ import { matchIfRule } from './styleManager';
  */
 const SINGLE_VALUE_FIELDS = new Set([
   'title_smart',
+  'journal_full',
+  'journal_abbr',
+  'journal_smart',
   'impact_factor_smart',
   'year',
   'extra_translation'
@@ -45,7 +48,7 @@ export function buildPropertyRecord(
     }
 
     // 强类型转换：单值字段 vs 列表字段
-    if (SINGLE_VALUE_FIELDS.has(mapping.obsidianKey)) {
+    if (SINGLE_VALUE_FIELDS.has(mapping.zoteroField)) {
       // 单值字段：如果是数组，取第一个元素
       value = Array.isArray(value) ? value[0] : value;
     } else {
