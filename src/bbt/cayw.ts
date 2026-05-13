@@ -65,17 +65,17 @@ export async function isZoteroRunning(
 function getQueryParams(format: CitationFormat) {
   switch (format.format) {
     case 'formatted-bibliography':
-      return 'format=formatted-bibliography';
+      return 'format=formatted-bibliography&picker=bbt';
     case 'formatted-citation':
       return `format=formatted-citation${
         format.cslStyle ? `&style=${format.cslStyle}` : ''
-      }`;
+      }&picker=bbt`;
     case 'pandoc':
-      return `format=pandoc${format.brackets ? '&brackets=true' : ''}`;
+      return `format=pandoc${format.brackets ? '&brackets=true' : ''}&picker=bbt`;
     case 'latex':
-      return `format=latex&command=${format.command || 'cite'}`;
+      return `format=latex&command=${format.command || 'cite'}&picker=bbt`;
     case 'biblatex':
-      return `format=biblatex&command=${format.command || 'autocite'}`;
+      return `format=biblatex&command=${format.command || 'autocite'}&picker=bbt`;
   }
 }
 
@@ -169,7 +169,7 @@ export async function getCAYWJSON(database: DatabaseWithPort) {
       url: `http://127.0.0.1:${getPort(
         database.database,
         database.port
-      )}/better-bibtex/cayw?format=translate&translator=36a3b0b5-bad0-4a04-b79b-441c7cef77db&exportNotes=false`,
+      )}/better-bibtex/cayw?format=translate&translator=36a3b0b5-bad0-4a04-b79b-441c7cef77db&exportNotes=false&picker=bbt`,
       headers: defaultHeaders,
     });
 
