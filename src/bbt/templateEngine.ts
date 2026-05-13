@@ -2,6 +2,19 @@ import { extractSmartField } from './smartExtractors';
 import { IfColorRule, PropertyMapping } from '../types';
 import { matchIfRule } from './styleManager';
 
+// ── YAML 强类型规范 ──
+
+/**
+ * 单值字段：输出为 `key: value`
+ * 其他字段：强制输出为 `key: [item1, item2]`
+ */
+const SINGLE_VALUE_FIELDS = new Set([
+  'title_smart',
+  'impact_factor_smart',
+  'year',
+  'extra_translation'
+]);
+
 // ── Record 构建 ──
 
 export function buildPropertyRecord(
@@ -15,7 +28,7 @@ export function buildPropertyRecord(
   for (const mapping of propertyMappings) {
     if (!mapping.zoteroField || !mapping.obsidianKey) continue;
 
-    const value = extractSmartField(mapping.zoteroField, item);
+    let value = extractSmartField(mapping.zoteroField, item);
 
     // 跳过无效值
     if (value === null || value === undefined || value === '') continue;
@@ -29,6 +42,15 @@ export function buildPropertyRecord(
         cssclasses.push(matchedRule.className);
       }
       continue;
+    }
+
+    // 强类型转换：单值字段 vs 列表字段
+    if (SINGLE_VALUE_FIELDS.has(mapping.obsidianKey)) {
+      // 单值字段：如果是数组，取第一个元素
+      value = Array.isArray(value) ? value[0] : value;
+    } else {
+      // 列表字段：如果不是数组，包装成数组
+      value = Array.isArray(value) ? value : [value];
     }
 
     record[mapping.obsidianKey] = value;
