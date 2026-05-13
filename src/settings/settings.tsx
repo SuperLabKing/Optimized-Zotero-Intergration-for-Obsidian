@@ -707,11 +707,16 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
             .setIcon('trash')
             .setTooltip(t('settings.template.deleteMapping'))
             .onClick(() => {
+              const scrollContainer = this.containerEl;
+              const scrollTop = scrollContainer.scrollTop;
+
               const updated = [...(this.plugin.settings.propertyMappings || [])];
               updated.splice(i, 1);
               this.plugin.settings.propertyMappings = updated;
               this.debouncedSave();
               this._renderPropertyMappings(container);
+
+              scrollContainer.scrollTop = scrollTop;
             })
         );
     });
