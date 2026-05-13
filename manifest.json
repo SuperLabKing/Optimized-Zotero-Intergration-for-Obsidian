@@ -1,9 +1,9 @@
 {
 	"id": "optimized-zotero-integration",
 	"name": "Optimized Zotero Integration",
-	"version": "2.2.0",
+	"version": "3.0.0",
 	"minAppVersion": "1.1.1",
-	"description": "v2.2.0: 动态双轨语义评价系统 - Unicode防乱码星标 + 3+5双轨评级(预读/已读) + 阅读状态中文化 + 列表类型属性",
+	"description": "v3.0.0: 智能多级文件夹路由 + 存储Tab独立 + 递归目录生成器 + 最长路径优先算法",
 	"author": "SuperLabKing",
 	"authorUrl": "https://github.com/SuperLabKing/Optimized-Zotero-Intergration-for-Obsidian",
 	"isDesktopOnly": true

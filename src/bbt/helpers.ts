@@ -15,12 +15,67 @@ export function getPort(database: Database, port?: string) {
   return port;
 }
 
+/**
+ * 递归目录生成器 (v3.0 Smart Directory Routing)
+ *
+ * Obsidian 的 app.vault.createFolder() 不支持一次性创建多级不存在的目录。
+ * 本函数将目标路径按 / 拆分，逐级检查并创建，确保多级目录树安全构建。
+ *
+ * @param vault - Obsidian Vault 实例 (app.vault)
+ * @param fullPath - 完整的 Obsidian 路径，如 "Base/A/B/C"
+ */
+export async function ensureFolderExists(
+  vault: { adapter: { exists: (p: string) => Promise<boolean> }; createFolder: (p: string) => Promise<void> },
+  fullPath: string
+): Promise<void> {
+  if (!fullPath || fullPath === '/' || fullPath === '.') return;
+
+  const segments = fullPath.split('/').filter(Boolean);
+  let accumulated = '';
+
+  for (const segment of segments) {
+    accumulated = accumulated ? `${accumulated}/${segment}` : segment;
+    if (!(await vault.adapter.exists(accumulated))) {
+      await vault.createFolder(accumulated);
+    }
+  }
+}
+
+/**
+ * @deprecated 使用 ensureFolderExists 替代。
+ * 保留此函数以兼容旧有调用，内部委托给 ensureFolderExists。
+ */
 export async function mkMDDir(mdPath: string) {
   const dir = path.dirname(mdPath);
+  await ensureFolderExists(app.vault, dir);
+}
 
-  if (await app.vault.adapter.exists(dir)) return;
+/**
+ * 多路径冲突解决算法 (v3.0 Smart Directory Routing)
+ *
+ * 一篇 Zotero 文献可能同时属于多个分类（collections_path 数组长度 > 1），
+ * 但物理文件只能在一个目录中。采用"最长路径优先 (Most Specific/Deepest)"策略：
+ *
+ * - 无分类 → 返回默认后备文件夹 "Uncategorized"
+ * - 单分类 → 直接返回该路径
+ * - 多分类 → 选路径字符串最长的（分类最具体、最深层）
+ *
+ * @param collectionPaths - Zotero 分类路径数组，如 ["A/B", "A/B/C", "D"]
+ * @returns 选定的主路径
+ */
+export function getPrimaryPath(collectionPaths: string[]): string {
+  if (!collectionPaths || collectionPaths.length === 0) {
+    return 'Uncategorized';
+  }
 
-  await app.vault.createFolder(dir);
+  if (collectionPaths.length === 1) {
+    return collectionPaths[0];
+  }
+
+  // 最长路径优先：选最深层、最具体的分类
+  return collectionPaths.reduce((longest, current) =>
+    current.length > longest.length ? current : longest
+  );
 }
 
 export function replaceIllegalChars(str: string) {

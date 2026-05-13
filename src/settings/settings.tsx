@@ -30,190 +30,45 @@ import { SettingItem } from './SettingItem';
 
 // ── Types ──
 
-type TabId = 'general' | 'beautify' | 'template';
+type TabId = 'general' | 'storage' | 'beautify' | 'template';
 
 const TAB_ITEMS: { id: TabId; labelKey: string }[] = [
   { id: 'general', labelKey: 'settings.tab.general' },
+  { id: 'storage', labelKey: 'settings.tab.storage' },
   { id: 'beautify', labelKey: 'settings.tab.beautify' },
   { id: 'template', labelKey: 'settings.tab.template' },
 ];
 
-// ── General Tab 的 React 组件（保持不变）──
+// ── Storage Tab 的 React 组件 ──
 
-interface SettingsComponentProps {
+interface StorageSettingsProps {
   settings: ZoteroConnectorSettings;
-  addCiteFormat: (format: CitationFormat) => CitationFormat[];
-  updateCiteFormat: (index: number, format: CitationFormat) => CitationFormat[];
-  removeCiteFormat: (index: number) => CitationFormat[];
-  addExportFormat: (format: ExportFormat) => ExportFormat[];
-  updateExportFormat: (index: number, format: ExportFormat) => ExportFormat[];
-  removeExportFormat: (index: number) => ExportFormat[];
   updateSetting: (key: keyof ZoteroConnectorSettings, value: any) => void;
 }
 
-function SettingsComponent({
-  settings,
-  addCiteFormat,
-  updateCiteFormat,
-  removeCiteFormat,
-  addExportFormat,
-  updateExportFormat,
-  removeExportFormat,
-  updateSetting,
-}: SettingsComponentProps) {
-  const [citeFormatState, setCiteFormatState] = React.useState(settings.citeFormats);
-  const [exportFormatState, setExportFormatState] = React.useState(settings.exportFormats);
-  const [openNoteAfterImportState, setOpenNoteAfterImport] = React.useState(!!settings.openNoteAfterImport);
+function StorageSettings({ settings, updateSetting }: StorageSettingsProps) {
   const [ocrState, setOCRState] = React.useState(settings.pdfExportImageOCR);
-  const [concat, setConcat] = React.useState(!!settings.shouldConcat);
-  const [locale, setLocaleState] = React.useState(getLocale());
-
-  const updateCite = React.useCallback(
-    debounce((index: number, format: CitationFormat) => {
-      setCiteFormatState(updateCiteFormat(index, format));
-    }, 200, true),
-    [updateCiteFormat]
-  );
-
-  const addCite = React.useCallback(() => {
-    setCiteFormatState(
-      addCiteFormat({ name: `Format #${citeFormatState.length + 1}`, format: 'formatted-citation' })
-    );
-  }, [addCiteFormat, citeFormatState]);
-
-  const removeCite = React.useCallback((index: number) => {
-    setCiteFormatState(removeCiteFormat(index));
-  }, [removeCiteFormat]);
-
-  const updateExport = React.useCallback(
-    debounce((index: number, format: ExportFormat) => {
-      setExportFormatState(updateExportFormat(index, format));
-    }, 200, true),
-    [updateExportFormat]
-  );
-
-  const addExport = React.useCallback(() => {
-    setExportFormatState(
-      addExportFormat({
-        name: `Import #${exportFormatState.length + 1}`,
-        outputPathTemplate: '{{citekey}}.md',
-        imageOutputPathTemplate: '{{citekey}}/',
-        imageBaseNameTemplate: 'image',
-      })
-    );
-  }, [addExportFormat, citeFormatState]);
-
-  const removeExport = React.useCallback((index: number) => {
-    setExportFormatState(removeExportFormat(index));
-  }, [removeExportFormat]);
-
   const tessPathRef = React.useRef<HTMLInputElement>(null);
   const tessDataPathRef = React.useRef<HTMLInputElement>(null);
 
-  const [useCustomPort, setUseCustomPort] = React.useState(settings.database === 'Custom');
-
   return (
     <div>
-      <SettingItem name={t('settings.general')} isHeading />
+      <SettingItem name={t('settings.storage.heading')} isHeading />
 
-      <SettingItem name={t('settings.locale')} description={t('settings.locale.desc')}>
-        <select
-          className="dropdown"
-          value={locale}
-          onChange={(e) => {
-            const newLocale = (e.target as HTMLSelectElement).value as 'en' | 'zh-cn';
-            setLocaleState(newLocale);
-            setLocale(newLocale);
-            updateSetting('locale', newLocale);
-          }}
-        >
-          {getLocaleOptions().map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+      <SettingItem
+        name={t('settings.baseStorageFolder')}
+        description={t('settings.baseStorageFolder.desc')}
+      >
+        <input
+          onChange={(e) => updateSetting('baseStorageFolder', (e.target as HTMLInputElement).value)}
+          type="text"
+          spellCheck={false}
+          placeholder={t('settings.baseStorageFolder.placeholder')}
+          defaultValue={settings.baseStorageFolder || ''}
+        />
       </SettingItem>
 
       <AssetDownloader settings={settings} updateSetting={updateSetting} />
-
-      <SettingItem name={t('settings.database')} description={t('settings.database.desc')}>
-        <select
-          className="dropdown"
-          defaultValue={settings.database}
-          onChange={(e) => {
-            const value = (e.target as HTMLSelectElement).value;
-            updateSetting('database', value);
-            setUseCustomPort(value === 'Custom');
-          }}
-        >
-          <option value="Zotero">Zotero</option>
-          <option value="Juris-M">Juris-M</option>
-          <option value="Custom">Custom</option>
-        </select>
-      </SettingItem>
-
-      {useCustomPort ? (
-        <SettingItem name={t('settings.port')} description={t('settings.port.desc')}>
-          <input
-            onChange={(e) => updateSetting('port', (e.target as HTMLInputElement).value)}
-            type="number"
-            placeholder={t('settings.port.placeholder')}
-            defaultValue={settings.port}
-          />
-        </SettingItem>
-      ) : null}
-
-      <SettingItem name={t('settings.noteImportFolder')} description={t('settings.noteImportFolder.desc')}>
-        <input
-          onChange={(e) => updateSetting('noteImportFolder', (e.target as HTMLInputElement).value)}
-          type="text"
-          spellCheck={false}
-          placeholder={t('settings.noteImportFolder.placeholder')}
-          defaultValue={settings.noteImportFolder}
-        />
-      </SettingItem>
-
-      <SettingItem name={t('settings.openAfterImport')} description={t('settings.openAfterImport.desc')}>
-        <div
-          onClick={() => setOpenNoteAfterImport((s) => { updateSetting('openNoteAfterImport', !s); return !s; })}
-          className={`checkbox-container${openNoteAfterImportState ? ' is-enabled' : ''}`}
-        />
-      </SettingItem>
-
-      <SettingItem name={t('settings.whichNotesToOpen')} description={t('settings.whichNotesToOpen.desc')}>
-        <select
-          className="dropdown"
-          defaultValue={settings.whichNotesToOpenAfterImport}
-          disabled={!settings.openNoteAfterImport}
-          onChange={(e) => updateSetting('whichNotesToOpenAfterImport', (e.target as HTMLSelectElement).value)}
-        >
-          <option value="first-imported-note">{t('settings.whichNotes.first')}</option>
-          <option value="last-imported-note">{t('settings.whichNotes.last')}</option>
-          <option value="all-imported-notes">{t('settings.whichNotes.all')}</option>
-        </select>
-      </SettingItem>
-
-      <SettingItem name={t('settings.concat')} description={t('settings.concat.desc')}>
-        <div
-          onClick={() => setConcat((s) => { updateSetting('shouldConcat', !s); return !s; })}
-          className={`checkbox-container${concat ? ' is-enabled' : ''}`}
-        />
-      </SettingItem>
-
-      <SettingItem name={t('settings.citeFormats')} isHeading />
-      <SettingItem>
-        <button onClick={addCite} className="mod-cta">{t('settings.addCiteFormat')}</button>
-      </SettingItem>
-      {citeFormatState.map((f, i) => (
-        <CiteFormatSettings key={i} format={f} index={i} updateFormat={updateCite} removeFormat={removeCite} />
-      ))}
-
-      <SettingItem name={t('settings.importFormats')} isHeading />
-      <SettingItem>
-        <button onClick={addExport} className="mod-cta">{t('settings.addImportFormat')}</button>
-      </SettingItem>
-      {exportFormatState.map((f, i) => (
-        <ExportFormatSettings key={exportFormatState.length - i} format={f} index={i} updateFormat={updateExport} removeFormat={removeExport} />
-      ))}
 
       <SettingItem name={t('settings.imageSettings')} description={t('settings.imageSettings.desc')} isHeading />
       <SettingItem name={t('settings.imageFormat')}>
@@ -335,6 +190,174 @@ function SettingsComponent({
   );
 }
 
+// ── General Tab 的 React 组件 ──
+
+interface SettingsComponentProps {
+  settings: ZoteroConnectorSettings;
+  addCiteFormat: (format: CitationFormat) => CitationFormat[];
+  updateCiteFormat: (index: number, format: CitationFormat) => CitationFormat[];
+  removeCiteFormat: (index: number) => CitationFormat[];
+  addExportFormat: (format: ExportFormat) => ExportFormat[];
+  updateExportFormat: (index: number, format: ExportFormat) => ExportFormat[];
+  removeExportFormat: (index: number) => ExportFormat[];
+  updateSetting: (key: keyof ZoteroConnectorSettings, value: any) => void;
+}
+
+function SettingsComponent({
+  settings,
+  addCiteFormat,
+  updateCiteFormat,
+  removeCiteFormat,
+  addExportFormat,
+  updateExportFormat,
+  removeExportFormat,
+  updateSetting,
+}: SettingsComponentProps) {
+  const [citeFormatState, setCiteFormatState] = React.useState(settings.citeFormats);
+  const [exportFormatState, setExportFormatState] = React.useState(settings.exportFormats);
+  const [openNoteAfterImportState, setOpenNoteAfterImport] = React.useState(!!settings.openNoteAfterImport);
+  const [concat, setConcat] = React.useState(!!settings.shouldConcat);
+  const [locale, setLocaleState] = React.useState(getLocale());
+
+  const updateCite = React.useCallback(
+    debounce((index: number, format: CitationFormat) => {
+      setCiteFormatState(updateCiteFormat(index, format));
+    }, 200, true),
+    [updateCiteFormat]
+  );
+
+  const addCite = React.useCallback(() => {
+    setCiteFormatState(
+      addCiteFormat({ name: `Format #${citeFormatState.length + 1}`, format: 'formatted-citation' })
+    );
+  }, [addCiteFormat, citeFormatState]);
+
+  const removeCite = React.useCallback((index: number) => {
+    setCiteFormatState(removeCiteFormat(index));
+  }, [removeCiteFormat]);
+
+  const updateExport = React.useCallback(
+    debounce((index: number, format: ExportFormat) => {
+      setExportFormatState(updateExportFormat(index, format));
+    }, 200, true),
+    [updateExportFormat]
+  );
+
+  const addExport = React.useCallback(() => {
+    setExportFormatState(
+      addExportFormat({
+        name: `Import #${exportFormatState.length + 1}`,
+        outputPathTemplate: '{{citekey}}.md',
+        imageOutputPathTemplate: '{{citekey}}/',
+        imageBaseNameTemplate: 'image',
+      })
+    );
+  }, [addExportFormat, citeFormatState]);
+
+  const removeExport = React.useCallback((index: number) => {
+    setExportFormatState(removeExportFormat(index));
+  }, [removeExportFormat]);
+
+  const tessPathRef = React.useRef<HTMLInputElement>(null);
+  const tessDataPathRef = React.useRef<HTMLInputElement>(null);
+
+  const [useCustomPort, setUseCustomPort] = React.useState(settings.database === 'Custom');
+
+  return (
+    <div>
+      <SettingItem name={t('settings.general')} isHeading />
+
+      <SettingItem name={t('settings.locale')} description={t('settings.locale.desc')}>
+        <select
+          className="dropdown"
+          value={locale}
+          onChange={(e) => {
+            const newLocale = (e.target as HTMLSelectElement).value as 'en' | 'zh-cn';
+            setLocaleState(newLocale);
+            setLocale(newLocale);
+            updateSetting('locale', newLocale);
+          }}
+        >
+          {getLocaleOptions().map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </SettingItem>
+
+      <SettingItem name={t('settings.database')} description={t('settings.database.desc')}>
+        <select
+          className="dropdown"
+          defaultValue={settings.database}
+          onChange={(e) => {
+            const value = (e.target as HTMLSelectElement).value;
+            updateSetting('database', value);
+            setUseCustomPort(value === 'Custom');
+          }}
+        >
+          <option value="Zotero">Zotero</option>
+          <option value="Juris-M">Juris-M</option>
+          <option value="Custom">Custom</option>
+        </select>
+      </SettingItem>
+
+      {useCustomPort ? (
+        <SettingItem name={t('settings.port')} description={t('settings.port.desc')}>
+          <input
+            onChange={(e) => updateSetting('port', (e.target as HTMLInputElement).value)}
+            type="number"
+            placeholder={t('settings.port.placeholder')}
+            defaultValue={settings.port}
+          />
+        </SettingItem>
+      ) : null}
+
+      <SettingItem name={t('settings.openAfterImport')} description={t('settings.openAfterImport.desc')}>
+        <div
+          onClick={() => setOpenNoteAfterImport((s) => { updateSetting('openNoteAfterImport', !s); return !s; })}
+          className={`checkbox-container${openNoteAfterImportState ? ' is-enabled' : ''}`}
+        />
+      </SettingItem>
+
+      <SettingItem name={t('settings.whichNotesToOpen')} description={t('settings.whichNotesToOpen.desc')}>
+        <select
+          className="dropdown"
+          defaultValue={settings.whichNotesToOpenAfterImport}
+          disabled={!settings.openNoteAfterImport}
+          onChange={(e) => updateSetting('whichNotesToOpenAfterImport', (e.target as HTMLSelectElement).value)}
+        >
+          <option value="first-imported-note">{t('settings.whichNotes.first')}</option>
+          <option value="last-imported-note">{t('settings.whichNotes.last')}</option>
+          <option value="all-imported-notes">{t('settings.whichNotes.all')}</option>
+        </select>
+      </SettingItem>
+
+      <SettingItem name={t('settings.concat')} description={t('settings.concat.desc')}>
+        <div
+          onClick={() => setConcat((s) => { updateSetting('shouldConcat', !s); return !s; })}
+          className={`checkbox-container${concat ? ' is-enabled' : ''}`}
+        />
+      </SettingItem>
+
+      <SettingItem name={t('settings.citeFormats')} isHeading />
+      <SettingItem>
+        <button onClick={addCite} className="mod-cta">{t('settings.addCiteFormat')}</button>
+      </SettingItem>
+      {citeFormatState.map((f, i) => (
+        <CiteFormatSettings key={i} format={f} index={i} updateFormat={updateCite} removeFormat={removeCite} />
+      ))}
+
+      <SettingItem name={t('settings.importFormats')} isHeading />
+      <SettingItem>
+        <button onClick={addExport} className="mod-cta">{t('settings.addImportFormat')}</button>
+      </SettingItem>
+      {exportFormatState.map((f, i) => (
+        <ExportFormatSettings key={exportFormatState.length - i} format={f} index={i} updateFormat={updateExport} removeFormat={removeExport} />
+      ))}
+
+    </div>
+  );
+}
+
 // ── PluginSettingTab 类 ──
 
 export class ZoteroConnectorSettingsTab extends PluginSettingTab {
@@ -343,6 +366,7 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
   activeTab: TabId = 'general';
   private tabButtons: HTMLElement | null = null;
   private generalContainer: HTMLElement | null = null;
+  private storageContainer: HTMLElement | null = null;
   private beautifyContainer: HTMLElement | null = null;
   private templateContainer: HTMLElement | null = null;
 
@@ -383,11 +407,13 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
 
     // ── 内容容器 ──
     this.generalContainer = containerEl.createDiv();
+    this.storageContainer = containerEl.createDiv();
     this.beautifyContainer = containerEl.createDiv();
     this.templateContainer = containerEl.createDiv();
 
     // ── 渲染各 Tab ──
     this._renderGeneralTab(this.generalContainer);
+    this._renderStorageTab(this.storageContainer);
     this._renderBeautifyTab(this.beautifyContainer);
     this._renderTemplateTab(this.templateContainer);
 
@@ -398,6 +424,8 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
   private _showActiveTab() {
     if (this.generalContainer)
       this.generalContainer.style.display = this.activeTab === 'general' ? 'block' : 'none';
+    if (this.storageContainer)
+      this.storageContainer.style.display = this.activeTab === 'storage' ? 'block' : 'none';
     if (this.beautifyContainer)
       this.beautifyContainer.style.display = this.activeTab === 'beautify' ? 'block' : 'none';
     if (this.templateContainer)
@@ -416,6 +444,18 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
         addExportFormat={this.addExportFormat}
         updateExportFormat={this.updateExportFormat}
         removeExportFormat={this.removeExportFormat}
+        updateSetting={this.updateSetting}
+      />,
+      container
+    );
+  }
+
+  // ── Storage Tab ──
+
+  private _renderStorageTab(container: HTMLElement) {
+    ReactDOM.render(
+      <StorageSettings
+        settings={this.plugin.settings}
         updateSetting={this.updateSetting}
       />,
       container

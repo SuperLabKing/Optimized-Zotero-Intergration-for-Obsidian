@@ -105,7 +105,8 @@ export interface ZoteroConnectorSettings {
   titleMarqueeDuration?: number;
   propertyMappings?: PropertyMapping[];
   bodyTemplate?: string;
-  noteImportFolder: string;
+  /** v3.0: 智能多级文件夹路由的根存储目录 */
+  baseStorageFolder?: string;
   openNoteAfterImport: boolean;
   pdfExportImageDPI?: number;
   pdfExportImageFormat?: string;

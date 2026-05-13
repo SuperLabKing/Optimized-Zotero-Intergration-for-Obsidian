@@ -19,12 +19,15 @@ import { CiteKey, getCiteKeyFromAny, getCiteKeys } from './cayw';
 import { processZoteroAnnotationNotes } from './exportNotes';
 import { extractAnnotations } from './extractAnnotations';
 import {
+  ensureFolderExists,
   getColorCategory,
   getLocalURI,
+  getPrimaryPath,
   mkMDDir,
   sanitizeFilePath,
 } from './helpers';
 import { assembleMarkdown, buildPropertyRecord } from './templateEngine';
+import { extractSmartField } from './smartExtractors';
 import {
   getAttachmentsFromCiteKey,
   getBibFromCiteKey,
@@ -623,6 +626,36 @@ async function getTemplateData(
   return await applyBasicTemplates(markdownPath, item);
 }
 
+/**
+ * v3.0 智能多级文件夹路由：解析文件的最终存储路径。
+ *
+ * - 如果用户配置了 baseStorageFolder，则从 Zotero 分类中计算主路径，
+ *   组合为 baseStorageFolder/主分类路径/文件名。
+ * - 如果未配置 baseStorageFolder，回退到原模板生成的路径。
+ *
+ * @param templatePath  - 模板生成的原始文件路径
+ * @param item          - Zotero 文献条目
+ * @param baseFolder    - 用户配置的根存储目录
+ * @returns 最终的 Obsidian 绝对路径
+ */
+async function resolveSmartPath(
+  templatePath: string,
+  item: any,
+  baseFolder?: string
+): Promise<string> {
+  // 未配置智能路由时，回退到原模板路径
+  if (!baseFolder) {
+    return templatePath;
+  }
+
+  const fileName = path.posix.basename(templatePath);
+  const collectionPaths = (extractSmartField('collections_path', item) || []) as string[];
+  const primaryCollection = getPrimaryPath(collectionPaths);
+  const smartDir = path.posix.join(baseFolder, primaryCollection);
+
+  return normalizePath(path.posix.join(smartDir, fileName));
+}
+
 export async function exportToMarkdown(
   params: ExportToMarkdownParams,
   explicitCiteKeys?: CiteKey[],
@@ -876,12 +909,18 @@ export async function exportToMarkdown(
         // note while updating Zotero-managed keys with the new rendered values.
         const merged = mergeFrontmatterContent(fileContent, rendered);
         await app.vault.modify(file, merged);
+        createdOrUpdatedMarkdownFiles.push(markdownPath);
       } else {
-        await mkMDDir(markdownPath);
-        await app.vault.create(markdownPath, rendered);
+        // ── v3.0 智能多级文件夹路由 ──
+        const finalPath = await resolveSmartPath(
+          markdownPath,
+          item,
+          settings.baseStorageFolder
+        );
+        await ensureFolderExists(app.vault, path.posix.dirname(finalPath));
+        await app.vault.create(finalPath, rendered);
+        createdOrUpdatedMarkdownFiles.push(finalPath);
       }
-
-      createdOrUpdatedMarkdownFiles.push(markdownPath);
     } catch (e) {
       new Notice(
         t('notice.importFailed', markdownPath),

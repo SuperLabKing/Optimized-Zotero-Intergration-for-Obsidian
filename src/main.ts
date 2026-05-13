@@ -36,7 +36,7 @@ const exportCommandIDPrefix = 'zdc-exp-';
 const DEFAULT_SETTINGS: ZoteroConnectorSettings = {
   database: 'Zotero',
   locale: 'en',
-  noteImportFolder: '',
+  baseStorageFolder: '',
   pdfExportImageDPI: 120,
   pdfExportImageFormat: 'jpg',
   pdfExportImageQuality: 90,
@@ -143,10 +143,10 @@ export default class ZoteroConnector extends Plugin {
           database: this.settings.database,
           port: this.settings.port,
         };
-        noteExportPrompt(database, this.settings.noteImportFolder)
+        noteExportPrompt(database, (this.settings.baseStorageFolder || ''))
           .then((notes) => {
             if (notes) {
-              return filesFromNotes(this.settings.noteImportFolder, notes);
+              return filesFromNotes((this.settings.baseStorageFolder || ''), notes);
             }
             return [] as string[];
           })

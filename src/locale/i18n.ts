@@ -35,6 +35,11 @@ const en: StringMap = {
   'settings.noteImportFolder.desc':
     'Notes imported from Zotero will be added to this folder in your vault',
   'settings.noteImportFolder.placeholder': 'Example: folder 1/folder 2',
+  'settings.storage.heading': 'Storage & Attachments',
+  'settings.baseStorageFolder': 'Base Storage Folder (Smart Routing)',
+  'settings.baseStorageFolder.desc':
+    'v3.0: Root folder for smart multi-level directory routing. Zotero collections will be auto-created as subdirectories under this base folder.',
+  'settings.baseStorageFolder.placeholder': 'Example: ZoteroLibrary',
   'settings.openAfterImport': 'Open the created or updated note(s) after import',
   'settings.openAfterImport.desc':
     'The created or updated markdown files resulting from the import will be automatically opened.',
@@ -248,6 +253,7 @@ const en: StringMap = {
 
   // ── 多 Tab 设置面板 ──
   'settings.tab.general': 'General',
+  'settings.tab.storage': 'Storage',
   'settings.tab.beautify': 'Beautify',
   'settings.tab.template': 'Template',
 
@@ -277,6 +283,11 @@ const zhCN: StringMap = {
   'settings.noteImportFolder.desc':
     '从 Zotero 导入的笔记将存放在此文件夹中',
   'settings.noteImportFolder.placeholder': '示例：文件夹1/文件夹2',
+  'settings.storage.heading': '存储与附件',
+  'settings.baseStorageFolder': '根存储目录（智能路由）',
+  'settings.baseStorageFolder.desc':
+    'v3.0：智能多级文件夹路由的根目录。Zotero 的分类目录将作为子文件夹在此根目录下自动创建。',
+  'settings.baseStorageFolder.placeholder': '示例：ZoteroLibrary',
   'settings.openAfterImport': '导入后自动打开创建或更新的笔记',
   'settings.openAfterImport.desc':
     '导入所产生的 Markdown 文件将被自动打开。',
@@ -476,6 +487,7 @@ const zhCN: StringMap = {
 
   // ── 多 Tab 设置面板 ──
   'settings.tab.general': '常规',
+  'settings.tab.storage': '存储',
   'settings.tab.beautify': '美化',
   'settings.tab.template': '模板',
 

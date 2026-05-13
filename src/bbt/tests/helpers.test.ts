@@ -38,7 +38,7 @@ describe('mkMDDir()', () => {
       },
     } as any;
 
-    await mkMDDir('mock');
+    await mkMDDir('folder/mock');
 
     expect(global.app.vault.createFolder as jest.Mock).toBeCalled();
   });
