@@ -1,9 +1,9 @@
 {
 	"id": "optimized-zotero-integration",
 	"name": "Optimized Zotero Integration",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"minAppVersion": "1.1.1",
-	"description": "v2.0.0: 多Tab设置面板 + 可视化属性映射 + 智能数据清洗 + IF动态颜色 + 标题跑马灯 + 统一CSS渲染引擎",
+	"description": "v2.0.1: 修复引用选择器 - 添加picker=bbt参数强制使用Better BibTeX小弹窗而非Zotero主窗口",
 	"author": "SuperLabKing",
 	"authorUrl": "https://github.com/SuperLabKing/Optimized-Zotero-Intergration-for-Obsidian",
 	"isDesktopOnly": true
