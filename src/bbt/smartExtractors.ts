@@ -4,15 +4,15 @@ import { SmartFieldOption } from '../types';
 // ── 字段选项定义 ──
 
 export const SMART_FIELD_OPTIONS: SmartFieldOption[] = [
-  { value: 'title_smart', label: '标题 (包含超链接)' },
-  { value: 'authors_smart', label: '作者 (智能处理 et al. 与通讯)' },
-  { value: 'year', label: '日期 (提取年份)' },
-  { value: 'collections_path', label: '文库和分类 (多级路径)' },
-  { value: 'impact_factor_smart', label: '文库编目 (提取 IF 值)' },
-  { value: 'type_tags_smart', label: '标签：文献类型 (#)' },
-  { value: 'status_tags_smart', label: '标签：阅读状态 (/)' },
-  { value: 'priority_tags_smart', label: '标签：星标优先级 (⭐)' },
-  { value: 'extra_translation', label: '其他 (提取附加翻译)' },
+  { value: 'title_smart', label: '文献标题' },
+  { value: 'authors_smart', label: '文献作者' },
+  { value: 'year', label: '发表年份' },
+  { value: 'collections_path', label: '文库分类' },
+  { value: 'impact_factor_smart', label: '影响因子' },
+  { value: 'type_tags_smart', label: '文献类型' },
+  { value: 'status_tags_smart', label: '阅读状态' },
+  { value: 'priority_tags_smart', label: '星标评级' },
+  { value: 'extra_translation', label: '附加信息' },
 ];
 
 // ── 辅助函数 ──
