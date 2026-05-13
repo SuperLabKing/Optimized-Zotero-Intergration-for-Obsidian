@@ -695,13 +695,15 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
             updateMapping({ zoteroField: value });
             this._renderPropertyMappings(container);
           });
+          dropdown.selectEl.style.maxWidth = '200px';
         })
-        .addText((text) =>
+        .addText((text) => {
           text
             .setValue(mapping.obsidianKey)
             .setPlaceholder(t('settings.template.obsidianKey'))
-            .onChange((value) => updateMapping({ obsidianKey: value }))
-        )
+            .onChange((value) => updateMapping({ obsidianKey: value }));
+          text.inputEl.style.flexGrow = '1';
+        })
         .addExtraButton((btn) =>
           btn
             .setIcon('trash')
