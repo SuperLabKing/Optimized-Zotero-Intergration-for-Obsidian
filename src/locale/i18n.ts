@@ -330,6 +330,15 @@ const en: StringMap = {
   'notice.bibliographyUpdated': 'Bibliography updated with %s entries.',
   'notice.noCiteKeysFound': 'No [@citekey] references found in document.',
 
+  // ── v5.4 Floating Button & Auto-Sync Triggers ──
+  'settings.sync.floatingTriggers': 'Floating Button Triggers',
+  'settings.sync.floatingTriggers.desc': 'The floating sync button appears only when the current note satisfies any one of these conditions. Each condition checks that a YAML key exists, and optionally matches a specific value.',
+  'settings.sync.autoSyncTriggers': 'Auto-Sync Triggers',
+  'settings.sync.autoSyncTriggers.desc': 'Auto-sync fires when the opened note matches any one of these conditions AND the toggle is enabled. Configure independently from floating button triggers.',
+  'settings.sync.addTrigger': 'Add Trigger Condition',
+  'settings.sync.triggerKey': 'YAML property name',
+  'settings.sync.triggerValue': 'Match value (empty = any)',
+  'settings.sync.deleteTrigger': 'Delete this trigger',
 
   // ── Notes Tab ──
   'settings.notes.bodyTemplate': 'Body Template',
@@ -652,6 +661,15 @@ const zhCN: StringMap = {
   'notice.bibliographyUpdated': '参考文献列表已更新，共 %s 条。',
   'notice.noCiteKeysFound': '文档中未找到 [@citekey] 引用。',
 
+  // ── v5.4 悬浮球与自动同步触发条件 ──
+  'settings.sync.floatingTriggers': '悬浮球触发条件',
+  'settings.sync.floatingTriggers.desc': '仅当当前笔记满足以下任一条件时，才显示悬浮同步球。每个条件检查某个 YAML 属性是否存在，并可选择匹配特定值。',
+  'settings.sync.autoSyncTriggers': '自动同步触发条件',
+  'settings.sync.autoSyncTriggers.desc': '当打开的笔记满足任一条件且上方开关已开启时，自动静默同步。可与悬浮球触发条件独立配置。',
+  'settings.sync.addTrigger': '添加触发条件',
+  'settings.sync.triggerKey': 'YAML 属性名',
+  'settings.sync.triggerValue': '匹配值（留空=匹配任意值）',
+  'settings.sync.deleteTrigger': '删除此触发条件',
 
   // ── Notes Tab ──
   'settings.notes.bodyTemplate': '正文模板',

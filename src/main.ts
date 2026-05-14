@@ -51,8 +51,8 @@ const DEFAULT_SETTINGS: ZoteroConnectorSettings = {
     { kind: 'zotero', zoteroField: 'year', obsidianKey: '年份' },
     { kind: 'zotero', zoteroField: 'journal', obsidianKey: '出版物' },
   ],
-  triggerFeatureKey: '文献标题',
-  triggerFeatureValue: '',
+  floatingButtonTriggers: [{ key: '文献标题', value: '' }],
+  autoSyncTriggers: [{ key: '文献标题', value: '' }],
   syncTargets: ['metadata'],
   floatingButtonCommands: ['zdc-update-metadata'],
   cslStyle: '',
@@ -516,6 +516,17 @@ export default class ZoteroConnector extends Plugin {
         if (target && !targets.includes(target)) targets.push(target);
       }
       this.settings.syncTargets = targets.length > 0 ? targets : ['metadata'];
+    }
+
+    // v5.4: 迁移旧 triggerFeatureKey/triggerFeatureValue → floatingButtonTriggers + autoSyncTriggers
+    if (!this.settings.floatingButtonTriggers?.length && (this.settings as any).triggerFeatureKey) {
+      const oldKey = (this.settings as any).triggerFeatureKey as string;
+      const oldValue = ((this.settings as any).triggerFeatureValue as string) || '';
+      this.settings.floatingButtonTriggers = [{ key: oldKey, value: oldValue }];
+      this.settings.autoSyncTriggers = [{ key: oldKey, value: oldValue }];
+      delete (this.settings as any).triggerFeatureKey;
+      delete (this.settings as any).triggerFeatureValue;
+      await this.saveSettings();
     }
 
     // v5.2: 迁移旧格式 propertyMappings + customProperties → propertyItems

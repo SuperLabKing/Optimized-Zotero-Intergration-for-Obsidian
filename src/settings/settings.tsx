@@ -20,6 +20,7 @@ import {
   ExportFormat,
   IfColorRule,
   PropertyItem,
+  TriggerCondition,
   ZoteroConnectorSettings,
 } from '../types';
 import { AssetDownloader } from './AssetDownloader';
@@ -470,8 +471,145 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
 
   private _renderSyncTab(container: HTMLElement) {
     container.empty();
-    // 复用悬浮球设置渲染逻辑
-    this._renderFloatingTriggerKey(container);
+
+    const wrapper = container.createDiv('zotero-trigger-key-container zt-floating-card');
+    wrapper.id = 'zotero-trigger-key-container';
+
+    // ── Section A: 悬浮球触发条件 ──
+    this._renderTriggerConditionList(
+      wrapper,
+      'settings.sync.floatingTriggers',
+      'settings.sync.floatingTriggers.desc',
+      () => this.plugin.settings.floatingButtonTriggers || [{ key: '文献标题', value: '' }],
+      (updated) => { this.plugin.settings.floatingButtonTriggers = updated; }
+    );
+
+    // ── Section B: 自动同步触发条件 ──
+    this._renderTriggerConditionList(
+      wrapper,
+      'settings.sync.autoSyncTriggers',
+      'settings.sync.autoSyncTriggers.desc',
+      () => this.plugin.settings.autoSyncTriggers || [{ key: '文献标题', value: '' }],
+      (updated) => { this.plugin.settings.autoSyncTriggers = updated; }
+    );
+
+    // ── 开卷自动同步开关 ──
+    new Setting(wrapper)
+      .setName(t('settings.sync.autoSyncOnOpen'))
+      .setDesc(t('settings.sync.autoSyncOnOpen.desc'))
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.plugin.settings.autoSyncOnOpen || false)
+          .onChange((value) => {
+            this.plugin.settings.autoSyncOnOpen = value;
+            this.debouncedSave();
+          });
+      });
+
+    // ── 同步目标 ──
+    new Setting(wrapper)
+      .setName(t('settings.sync.targets'))
+      .setDesc(t('settings.sync.targets.desc'))
+      .setHeading();
+
+    const syncTargets = this.plugin.settings.syncTargets || ['metadata'];
+
+    const syncTargetOptions: { id: string; labelKey: string }[] = [
+      { id: 'metadata', labelKey: 'settings.sync.targets.metadata' },
+      { id: 'annotations', labelKey: 'settings.sync.targets.annotations' },
+    ];
+
+    for (const opt of syncTargetOptions) {
+      new Setting(wrapper)
+        .setName(t(opt.labelKey))
+        .addToggle((toggle) => {
+          toggle
+            .setValue(syncTargets.includes(opt.id))
+            .onChange((value) => {
+              const current = this.plugin.settings.syncTargets || ['metadata'];
+              if (value) {
+                if (!current.includes(opt.id)) current.push(opt.id);
+              } else {
+                const idx = current.indexOf(opt.id);
+                if (idx >= 0) current.splice(idx, 1);
+              }
+              this.plugin.settings.syncTargets = current;
+              this.debouncedSave();
+            });
+        });
+    }
+  }
+
+  /**
+   * v5.4: 渲染一个触发条件列表（可增删行，每行 = key 输入 + value 输入 + 删除按钮）
+   * @param getTriggers 获取最新列表的 getter（避免闭包捕获过时引用）
+   * @param updateTriggers 更新列表的 setter
+   */
+  private _renderTriggerConditionList(
+    wrapper: HTMLElement,
+    headingKey: string,
+    descKey: string,
+    getTriggers: () => TriggerCondition[],
+    updateTriggers: (updated: TriggerCondition[]) => void,
+  ) {
+    new Setting(wrapper)
+      .setName(t(headingKey))
+      .setDesc(t(descKey))
+      .setHeading();
+
+    // 添加按钮
+    new Setting(wrapper).addButton((btn) =>
+      btn
+        .setButtonText(t('settings.sync.addTrigger'))
+        .setCta()
+        .onClick(() => {
+          const updated = [...getTriggers(), { key: '', value: '' }];
+          updateTriggers(updated);
+          this.debouncedSave();
+          this.display();
+        })
+    );
+
+    // 每一行
+    const triggers = getTriggers();
+    triggers.forEach((cond, i) => {
+      const updateRow = (patch: Partial<TriggerCondition>) => {
+        const current = getTriggers();
+        const updated = [...current];
+        updated[i] = { ...updated[i], ...patch };
+        updateTriggers(updated);
+        this.debouncedSave();
+      };
+
+      new Setting(wrapper)
+        .addText((text) => {
+          text
+            .setValue(cond.key)
+            .setPlaceholder(t('settings.sync.triggerKey'))
+            .onChange((value) => updateRow({ key: value }));
+          text.inputEl.style.flex = '1';
+        })
+        .addText((text) => {
+          text
+            .setValue(cond.value)
+            .setPlaceholder(t('settings.sync.triggerValue'))
+            .onChange((value) => updateRow({ value: value }));
+          text.inputEl.style.flex = '1';
+        })
+        .addExtraButton((btn) =>
+          btn
+            .setIcon('trash')
+            .setTooltip(t('settings.sync.deleteTrigger'))
+            .onClick(() => {
+              const current = getTriggers();
+              const updated = [...current];
+              updated.splice(i, 1);
+              updateTriggers(updated);
+              this.debouncedSave();
+              this.display();
+            })
+        );
+    });
   }
 
   // ── Tab 1：元数据映射 ──
@@ -557,89 +695,6 @@ export class ZoteroConnectorSettingsTab extends PluginSettingTab {
 
   // ── v5.0 自定义属性区 ──
 
-
-  // ── v5.0 悬浮球触发条件区 ──
-
-  private _renderFloatingTriggerKey(container: HTMLElement) {
-    const existing = container.querySelector('#zotero-trigger-key-container');
-    if (existing) existing.remove();
-
-    const wrapper = container.createDiv('zotero-trigger-key-container zt-floating-card');
-    wrapper.id = 'zotero-trigger-key-container';
-
-    new Setting(wrapper)
-      .setName(t('settings.metadata.triggerFeatureKey'))
-      .setDesc(t('settings.metadata.triggerFeatureKey.desc'))
-      .addText((text) => {
-        text
-          .setValue(this.plugin.settings.triggerFeatureKey || '文献标题')
-          .setPlaceholder('文献标题')
-          .onChange((value) => {
-            this.plugin.settings.triggerFeatureKey = value;
-            this.debouncedSave();
-          });
-      });
-
-    new Setting(wrapper)
-      .setName(t('settings.metadata.triggerFeatureValue'))
-      .setDesc(t('settings.metadata.triggerFeatureValue.desc'))
-      .addText((text) => {
-        text
-          .setValue(this.plugin.settings.triggerFeatureValue || '')
-          .setPlaceholder('文献笔记')
-          .onChange((value) => {
-            this.plugin.settings.triggerFeatureValue = value;
-            this.debouncedSave();
-          });
-      });
-
-    // ── v5.2: 开卷自动同步开关 ──
-    new Setting(wrapper)
-      .setName(t('settings.sync.autoSyncOnOpen'))
-      .setDesc(t('settings.sync.autoSyncOnOpen.desc'))
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.autoSyncOnOpen || false)
-          .onChange((value) => {
-            this.plugin.settings.autoSyncOnOpen = value;
-            this.debouncedSave();
-          });
-      });
-
-    // ── v6.0: 同步目标 ──
-    new Setting(wrapper)
-      .setName(t('settings.sync.targets'))
-      .setDesc(t('settings.sync.targets.desc'))
-      .setHeading();
-
-    const syncTargets = this.plugin.settings.syncTargets || ['metadata'];
-
-    const syncTargetOptions: { id: string; labelKey: string }[] = [
-      { id: 'metadata', labelKey: 'settings.sync.targets.metadata' },
-      { id: 'annotations', labelKey: 'settings.sync.targets.annotations' },
-    ];
-
-    for (const opt of syncTargetOptions) {
-      new Setting(wrapper)
-        .setName(t(opt.labelKey))
-        .addToggle((toggle) => {
-          toggle
-            .setValue(syncTargets.includes(opt.id))
-            .onChange((value) => {
-              const current = this.plugin.settings.syncTargets || ['metadata'];
-              if (value) {
-                if (!current.includes(opt.id)) current.push(opt.id);
-              } else {
-                const idx = current.indexOf(opt.id);
-                if (idx >= 0) current.splice(idx, 1);
-              }
-              this.plugin.settings.syncTargets = current;
-              this.debouncedSave();
-            });
-        });
-    }
-
-  }
 
   // ── IF Color Rules（保留原生 Setting API）──
 

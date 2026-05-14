@@ -116,6 +116,14 @@ export interface SmartFieldOption {
   label: string;
 }
 
+/** v5.4: 触发条件 — YAML key + 可选 value 匹配 */
+export interface TriggerCondition {
+  /** YAML frontmatter 属性名 */
+  key: string;
+  /** 匹配值（空字符串 = 仅检查 key 是否存在） */
+  value: string;
+}
+
 export interface ZoteroConnectorSettings {
   database: Database;
   port?: string;
@@ -133,10 +141,10 @@ export interface ZoteroConnectorSettings {
   propertyMappings?: PropertyMapping[];
   /** v5.2 已废弃，迁移到 propertyItems */
   customProperties?: CustomProperty[];
-  /** v5.0: 悬浮球触发特征键，YAML 中包含此 key 时才判定为文献笔记 */
-  triggerFeatureKey?: string;
-  /** v5.1: 悬浮球触发特征值。设置了值则需要 key+value 同时匹配 */
-  triggerFeatureValue?: string;
+  /** v5.4: 悬浮球触发条件列表（OR 逻辑）。满足任一条件即显示悬浮同步按钮 */
+  floatingButtonTriggers?: TriggerCondition[];
+  /** v5.4: 自动同步触发条件列表（OR 逻辑）。满足任一条件且 autoSyncOnOpen 开启时自动同步 */
+  autoSyncTriggers?: TriggerCondition[];
   /** v5.0: 悬浮球点击后可触发的命令 ID 列表（多选），弹出菜单供用户选择
    * @deprecated v6.0 迁移到 syncTargets */
   floatingButtonCommands?: string[];

@@ -337,3 +337,13 @@
 .zt-floating-card .setting-item:last-child {
     border-bottom: none;
 }
+
+/* ========================================
+   悬浮球样式 (v5.4)
+   图标由 setIcon() 注入 Lucide icon，颜色自动跟随 --icon-color
+   ======================================== */
+
+.sync-floating-button:hover {
+    box-shadow: var(--shadow-xl) !important;
+    transform: scale(1.06) !important;
+}

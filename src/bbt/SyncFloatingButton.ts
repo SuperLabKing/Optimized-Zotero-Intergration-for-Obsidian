@@ -1,6 +1,7 @@
-import { MarkdownView, Notice, TFile } from 'obsidian';
+import { MarkdownView, Notice, setIcon, TFile } from 'obsidian';
 import type ZoteroConnector from '../main';
 import { t } from '../locale/i18n';
+import type { TriggerCondition } from '../types';
 
 /**
  * v5.0.1 磁吸悬浮同步球（Draggable Floating Action Button）
@@ -101,12 +102,13 @@ export class SyncFloatingButton {
       this.plugin.app.workspace.on('file-open', (file) => {
         if (file && this.isLiteratureNote(file)) {
           this.mount();
-          // v5.2: 开卷自动同步
-          if (this.plugin.settings.autoSyncOnOpen) {
-            this.tryAutoSync(file);
-          }
         } else {
           this.destroy();
+        }
+        // v5.4: 自动同步使用独立触发条件，与悬浮球显示分离
+        if (file && this.plugin.settings.autoSyncOnOpen &&
+            this.matchesTrigger(file, this.plugin.settings.autoSyncTriggers)) {
+          this.tryAutoSync(file);
         }
       })
     );
@@ -129,18 +131,29 @@ export class SyncFloatingButton {
     );
   }
 
-  private isLiteratureNote(file: TFile): boolean {
+  /**
+   * v5.4: 通用触发条件匹配器。
+   * 只要文件 frontmatter 满足 triggers 中任一条件即返回 true。
+   * value 为空字符串时仅检查 key 是否存在（不匹配具体值）。
+   * 若 triggers 为空/未定义，回退为默认条件 [{ key: '文献标题', value: '' }]。
+   */
+  private matchesTrigger(file: TFile, triggers: TriggerCondition[] | undefined): boolean {
     const cache = this.plugin.app.metadataCache.getFileCache(file);
     const fm = cache?.frontmatter;
     if (!fm) return false;
-    const triggerKey = this.plugin.settings.triggerFeatureKey || '文献标题';
-    if (!(triggerKey in fm)) return false;
-    const triggerValue = this.plugin.settings.triggerFeatureValue;
-    if (triggerValue) {
-      const actualValue = fm[triggerKey];
-      return String(actualValue ?? '') === triggerValue;
-    }
-    return true;
+
+    const defaults: TriggerCondition[] = [{ key: '文献标题', value: '' }];
+    const conditions = triggers?.length ? triggers : defaults;
+
+    return conditions.some((cond) => {
+      if (!(cond.key in fm)) return false;
+      if (!cond.value) return true;
+      return String(fm[cond.key] ?? '') === cond.value;
+    });
+  }
+
+  private isLiteratureNote(file: TFile): boolean {
+    return this.matchesTrigger(file, this.plugin.settings.floatingButtonTriggers);
   }
 
   /**
@@ -220,8 +233,8 @@ export class SyncFloatingButton {
     this.containerEl = container;
 
     const btn = container.createDiv('sync-floating-button');
-    btn.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>';
+    // Obsidian 原生 Lucide 图标，自动适配亮暗主题
+    setIcon(btn, 'book-open');
 
     // 基础样式
     btn.style.cssText = this.buildBaseStyle();
@@ -263,19 +276,19 @@ export class SyncFloatingButton {
       'right: 30px',
       'bottom: 50px',
       'z-index: 99',
-      'width: 48px',
-      'height: 48px',
-      'border-radius: 50%',
-      'background: #ffffff',
-      'border: 1px solid rgba(0,0,0,0.08)',
-      'box-shadow: 0 2px 12px rgba(0,0,0,0.15)',
+      'width: 44px',
+      'height: 44px',
+      'border-radius: 12px',
+      'background: var(--background-secondary)',
+      'border: 1px solid var(--background-modifier-border)',
+      'box-shadow: var(--shadow-l)',
       'display: flex',
       'align-items: center',
       'justify-content: center',
       'cursor: grab',
       'user-select: none',
-      'color: #555555',
-      'transition: box-shadow 0.2s ease, transform 0.15s ease',
+      'color: var(--icon-color)',
+      'transition: box-shadow 0.2s ease, transform 0.15s ease, border-radius 0.15s ease',
     ].join(';');
   }
 
@@ -332,8 +345,9 @@ export class SyncFloatingButton {
       // 拖拽中样式
       btn.style.transition = 'none';
       btn.style.cursor = 'grabbing';
-      btn.style.boxShadow = '0 6px 24px rgba(0,0,0,0.22)';
+      btn.style.boxShadow = 'var(--shadow-xl)';
       btn.style.transform = 'scale(1.08)';
+      btn.style.borderRadius = '14px';
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -367,8 +381,9 @@ export class SyncFloatingButton {
       this.dragging = false;
 
       btn.style.cursor = 'grab';
-      btn.style.boxShadow = '0 2px 12px rgba(0,0,0,0.15)';
+      btn.style.boxShadow = 'var(--shadow-l)';
       btn.style.transform = 'scale(1)';
+      btn.style.borderRadius = '12px';
 
       if (this.hasMoved) {
         this.snapToEdge();
@@ -419,7 +434,7 @@ export class SyncFloatingButton {
     this.clampVerticalPosition();
 
     setTimeout(() => {
-      if (btn) btn.style.transition = 'box-shadow 0.2s ease, transform 0.15s ease';
+      if (btn) btn.style.transition = 'box-shadow 0.2s ease, transform 0.15s ease, border-radius 0.15s ease';
     }, 350);
   }
 
