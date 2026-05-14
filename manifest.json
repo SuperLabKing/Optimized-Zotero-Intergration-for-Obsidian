@@ -1,7 +1,7 @@
 {
 	"id": "optimized-zotero-integration",
 	"name": "Optimized Zotero Integration",
-	"version": "4.0.0",
+	"version": "4.0.1",
 	"minAppVersion": "1.1.1",
 	"description": "v4.0.0: 元数据/笔记/参考文献三路解耦导入 + 作者属性列表化（第一作者† / 通讯作者✉ / et al.）",
 	"author": "SuperLabKing",
