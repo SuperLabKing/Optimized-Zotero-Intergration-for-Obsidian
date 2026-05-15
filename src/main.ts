@@ -122,7 +122,9 @@ export default class ZoteroConnector extends Plugin {
       );
       // CSL 样式变更时清除引注缓存并刷新 CSL XML
       this.citationEngine?.invalidateCache();
-      this.citationEngine?.refreshCslXml();
+      this.citationEngine?.refreshCslXml().then(() => {
+          this.dispatchOnAllViews();
+      });
     });
 
     this.updatePDFUtility();
@@ -631,4 +633,15 @@ export default class ZoteroConnector extends Plugin {
       editor.replaceRange?.('\n\n## 参考文献\n\n', cursor);
     }
   }
+	/** v6.8: CSL XML 抓取完成后触发所有活跃 Markdown 编辑器 recompute */
+	private dispatchOnAllViews() {
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			try {
+				const cm = (leaf.view as any)?.editor?.cm;
+				if (cm?.dispatch && !cm.isDestroyed) {
+					cm.dispatch({});
+				}
+			} catch { /* leaf might not have editor */ }
+		});
+	}
 }

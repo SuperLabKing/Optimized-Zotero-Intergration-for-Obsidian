@@ -187,14 +187,17 @@ function scanDocumentForCitations(docText: string): CitePos[] {
 
 class CitationPluginValue implements PluginValue {
 	decorations: DecorationSet;
+	private _lastCslVersion = _engine.cslFormatVersion;
 
 	constructor(private view: EditorView) {
 		this.decorations = this.compute();
 	}
 
 	update(update: ViewUpdate) {
+		const cslChanged = _engine.cslFormatVersion !== this._lastCslVersion;
+		if (cslChanged) this._lastCslVersion = _engine.cslFormatVersion;
 		const citationAffected = update.docChanged && this.changeAffectsCitations(update);
-		if (citationAffected || update.viewportChanged || update.selectionSet) {
+		if (citationAffected || update.viewportChanged || update.selectionSet || cslChanged) {
 			this.decorations = this.compute();
 		}
 	}

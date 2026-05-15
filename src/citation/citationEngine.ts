@@ -86,6 +86,8 @@ export class CitationEngine {
 	private _cachedCslXml: string | null = null;
 	/** 记录缓存 CSL XML 对应的样式标识符，用于 invalidation 判断 */
 	private _cachedCslStyle: string = '';
+	/** v6.8: CSL 格式版本号，refreshCslXml 成功时递增，供 ViewPlugin 检测重新 compute */
+	public cslFormatVersion = 0;
 
 	constructor(plugin: ZoteroConnector) {
 		this.plugin = plugin;
@@ -174,6 +176,7 @@ export class CitationEngine {
 				this._cachedCslXml = resp.text;
 				// 清空旧的 CitationFormat 缓存，下次调用 getCitationFormat() 重新解析
 				this._cachedFormat = null;
+				this.cslFormatVersion++;
 			}
 		} catch (e) {
 			console.warn('[CitationEngine] Failed to fetch CSL XML from:', url, e);
