@@ -237,13 +237,13 @@ export class CitationEditModal extends Modal {
 		for (let i = 0; i < this.citeKeys.length; i++) {
 			const key = this.citeKeys[i];
 			const item = engine.getIndividualJsonCached(key);
-			const number = engine.getNumber(key) || 0;
+			const displayNumber = i + 1;
 
 			if (item) {
-				this.renderCard(i, key, number, item);
+				this.renderCard(i, key, displayNumber, item);
 			} else {
 				missingKeys.push(key);
-				this.renderPlaceholderCard(i, key, number);
+				this.renderPlaceholderCard(i, key, displayNumber);
 			}
 		}
 
@@ -463,7 +463,7 @@ export class CitationEditModal extends Modal {
 		) as HTMLElement | null;
 		if (!placeholder) return;
 
-		const number = this.plugin.citationEngine.getNumber(key) || 0;
+		const number = index + 1;
 		const newCard = this.buildCardElement(index, key, number, item);
 		placeholder.replaceWith(newCard);
 	}
