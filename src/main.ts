@@ -242,35 +242,40 @@ export default class ZoteroConnector extends Plugin {
           database: this.settings.database,
           port: this.settings.port,
         };
+        const plainExportFormat: ExportFormat = {
+          name: '__quick_import__',
+          outputPathTemplate: this.settings.baseStorageFolder
+            ? `${this.settings.baseStorageFolder}/{{citekey}}.md`
+            : '{{citekey}}.md',
+          imageOutputPathTemplate: '{{citekey}}/',
+          imageBaseNameTemplate: 'image',
+        };
+        const progressNotice = new Notice('', 0);
         try {
-          const citeKeys = await getCiteKeys(database);
-          if (!citeKeys.length) return;
-
-          const progressNotice = new Notice('正在导入文献...', 0);
-          try {
-            const plainExportFormat: ExportFormat = {
-              name: '__import__',
-              outputPathTemplate: this.settings.baseStorageFolder
-                ? `${this.settings.baseStorageFolder}/{{citekey}}`
-                : '{{citekey}}',
-              imageOutputPathTemplate: '{{citekey}}/',
-              imageBaseNameTemplate: 'image',
-            };
-
-            const paths = await exportToMarkdown(
-              { settings: this.settings, database, exportFormat: plainExportFormat },
-              citeKeys,
-            );
-            progressNotice.hide();
-            new Notice(`✅ 已导入 ${paths.length} 篇文献`, 3000);
-            this.openNotes(paths);
-          } catch (e) {
-            progressNotice.hide();
-            throw e;
-          }
+          const paths = await exportToMarkdown(
+            { settings: this.settings, database, exportFormat: plainExportFormat },
+            undefined,
+            ({ macro, micro }) => {
+              progressNotice.noticeEl.empty();
+              progressNotice.noticeEl.createSpan({ text: macro });
+              if (micro) {
+                progressNotice.noticeEl.createEl('br');
+                const microEl = progressNotice.noticeEl.createSpan({ text: micro });
+                microEl.style.fontSize = '0.85em';
+                microEl.style.opacity = '0.8';
+              }
+            },
+          );
+          progressNotice.hide();
+          new Notice(`✅ 导入完成：${paths.length} 篇文献`, 3000);
+          this.openNotes(paths);
         } catch (e) {
+          progressNotice.hide();
           console.error('[import-literature]', e);
-          new Notice(`❌ 导入失败：${e instanceof Error ? e.message : 'Unknown error'}`, 5000);
+          new Notice(
+            `❌ 导入失败：${e instanceof Error ? e.message : 'Unknown error'}`,
+            5000,
+          );
         }
       },
     });

@@ -1087,7 +1087,9 @@ export async function exportToMarkdown(
         const renderedBody = removeFrontmatter(rendered);
         const hasMarkers =
           renderedBody.includes(ZOTERO_START) && renderedBody.includes(ZOTERO_END);
-        const safeContent = hasMarkers
+        // v6.0.0-alpha.5: 防御 renderedBody 为空时 replace("", ...) 注入到文件最开头的 bug
+        const bodyBlank = !renderedBody.trim();
+        const safeContent = hasMarkers || bodyBlank
           ? rendered
           : rendered.replace(
               renderedBody,

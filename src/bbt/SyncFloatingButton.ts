@@ -132,6 +132,16 @@ export class SyncFloatingButton {
       this.plugin.emitter.on('bibClean', () => this.updateBibStatusIcon())
     );
 
+    // v6.0.0-alpha.5: metadataCache 变更时重新检查挂载（新文件 frontmatter 解析就绪后）
+    this.plugin.registerEvent(
+      this.plugin.app.metadataCache.on('changed', (file) => {
+        const activeFile = this.plugin.app.workspace.getActiveFile();
+        if (activeFile && activeFile.path === file.path && this.isLiteratureNote(activeFile as TFile)) {
+          this.mount();
+        }
+      })
+    );
+
     // 窗口大小改变时修正垂直位置
     this.plugin.registerEvent(
       this.plugin.app.workspace.on('resize', () => {

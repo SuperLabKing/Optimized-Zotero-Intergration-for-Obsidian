@@ -127,7 +127,7 @@ function yamlEscape(value: string): string {
 }
 
 export function recordToYaml(record: Record<string, any>): string {
-  const lines: string[] = ['---'];
+  const lines: string[] = [];
 
   for (const [key, value] of Object.entries(record)) {
     if (value === null || value === undefined) continue;
@@ -157,8 +157,9 @@ export function recordToYaml(record: Record<string, any>): string {
     }
   }
 
-  lines.push('---');
-  return lines.join('\n');
+  // v6.0.0-alpha.5: 防御性构造 — YAML 分隔符始终在外层确保置顶
+  const content = lines.join('\n');
+  return `---\n${content}\n---`;
 }
 
 // ── 正文模板变量替换 ──
@@ -198,5 +199,14 @@ export function assembleMarkdown(
   const wrappedBody = body
     ? `\n${ZOTERO_BODY_START}\n${body}\n${ZOTERO_BODY_END}\n`
     : '';
-  return yaml + wrappedBody;
+
+  // 严格保证 YAML frontmatter 在文件最顶端（v6.0.0-alpha.5 防御性修复）
+  let content = yaml + wrappedBody;
+  if (!content.startsWith('---')) {
+    content = content.replace(/^\s+/, '');
+    if (!content.startsWith('---')) {
+      content = '---\n---\n\n' + content;
+    }
+  }
+  return content;
 }
