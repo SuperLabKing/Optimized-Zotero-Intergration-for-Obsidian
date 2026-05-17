@@ -169,6 +169,7 @@ export default class ZoteroConnector extends Plugin {
       editorCallback: async (editor) => {
         const file = this.app.workspace.getActiveFile();
         if (!file) return;
+        const targetPath = file.path; // 立刻锁死目标文件
         const cache = this.app.metadataCache.getFileCache(file);
         const citeKey = (cache?.frontmatter?.citekey || cache?.frontmatter?.citationKey || file.basename) as string;
         if (!citeKey) {
@@ -180,7 +181,17 @@ export default class ZoteroConnector extends Plugin {
         hud?.setProgress(5);
         try {
           hud?.setProgress(25);
-          await this.runSilentAutoSync(citeKey, 1, file.path);
+          await this.runSilentAutoSync(citeKey, 1, targetPath);
+
+          // 写入守卫：若用户已切走，放弃后续更新
+          if (this.app.workspace.getActiveFile()?.path !== targetPath) {
+            console.warn('[HUD Guard] 文件已切换，放弃后台状态更新！');
+            hud?.hideProgress();
+            return;
+          }
+
+          // 同步成功后刷新引注缓存基线，终结假阳性
+          await hud?.refreshCitationCachesAfterSync(file);
           hud?.setProgress(100);
           // 补间引擎在 visual=100 时自动触发 triggerSuccess()
         } catch (e) {
@@ -224,14 +235,19 @@ export default class ZoteroConnector extends Plugin {
           new Notice(t('notice.noActiveEditorView'), 3000);
           return;
         }
+        // 立刻锁死目标文件，杜绝跨文件覆盖
+        const file = this.app.workspace.getActiveFile();
+        if (!file) return;
+        const targetPath = file.path;
         const hud = SyncFloatingButton.instance;
         hud?.showProgress();
         hud?.setProgress(20);
         try {
-          const filePath = this.app.workspace.getActiveFile()?.path;
-          updateBibliographyText(view, filePath);
-          markBibClean();
-          try { this.emitter.trigger('bibClean'); } catch { /* 静默 */ }
+          updateBibliographyText(view, targetPath);
+
+          // 刷新 HUD 引注缓存基线，终结文献更新后亮橙灯
+          await hud?.refreshCitationCachesAfterSync(file, view.state.doc.toString());
+
           hud?.setProgress(100);
           // 补间引擎在 visual=100 时自动触发 triggerSuccess()
           new Notice(t('notice.bibliographyUpdated'), 3000);

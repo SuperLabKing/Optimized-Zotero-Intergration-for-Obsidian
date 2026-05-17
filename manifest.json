@@ -1,9 +1,9 @@
 {
 	"id": "optimized-zotero-integration",
 	"name": "Optimized Zotero Integration",
-	"version": "6.4.0",
+	"version": "6.5.0",
 	"minAppVersion": "1.1.1",
-	"description": "v6.4.0: HUD完全体 — SVG抗锯齿进度环 + 严格同心几何锁死 + 阴影重构 + 同步动效闭环",
+	"description": "v6.5.0: 开卷静默Diff拦截器 — 引注签名缓存 + 零延迟本地扫描 + 精准分支路由，阅读零打扰",
 	"author": "SuperLabKing",
 	"authorUrl": "https://github.com/SuperLabKing/Optimized-Zotero-Intergration-for-Obsidian",
 	"isDesktopOnly": true

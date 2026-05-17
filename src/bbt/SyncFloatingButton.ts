@@ -1,11 +1,12 @@
 import { MarkdownView, Notice, setIcon, TFile } from 'obsidian';
 import { getItemJSONFromCiteKeys } from './jsonRPC';
-import { getCiteKeyFromAny } from './cayw';
 import type ZoteroConnector from '../main';
 import { t } from '../locale/i18n';
 import type { TriggerCondition } from '../types';
-import { isBibOutOfSync, onBibDirtyChange } from '../citation/bibliographyWriter';
+import { isBibOutOfSync, markBibDirty, markBibClean } from '../citation/bibliographyWriter';
+import { isMetadataOutOfSync, checkMetadataDirty, markMetadataSynced, resetMetadataState, metadataSyncHashCache } from '../citation/metadataSyncDetector';
 
+import { getActiveEditorView } from '../citation/cm6LivePreview';
 /**
  * v5.0.1 磁吸悬浮同步球（Draggable Floating Action Button）
  *
@@ -24,6 +25,9 @@ import { isBibOutOfSync, onBibDirtyChange } from '../citation/bibliographyWriter
  */
 
 const POS_STORAGE_KEY = 'sync-floating-button-pos';
+
+/** v6.5.0: 预编译引注签名正则 — 严格匹配 [@key] 或 [@key1; @key2] */
+const CITEKEY_SIG_RE = /\[@([^\]]+)\]/g;
 
 interface SavedPosition {
   left: string;   // 'auto' | 'Npx'
@@ -85,10 +89,17 @@ export class SyncFloatingButton {
   // v5.2 自动同步防抖 (static 跨实例共享)
   // 同时记录已执行同步的命令快照，用户修改「执行同步内容」勾选后重开文件可立即生效
   private static autoSyncDebounceMap = new Map<string, { time: number; commands: string[] }>();
-  private static metadataHashCache = new Map<string, string>();
+  /** v6.5.0: 文档引注签名缓存 — 纯本地扫描，零延迟拦截 */
+  private static citekeySignatureCache = new Map<string, string>();
+  /** v6.5.0: 参考文献区块哈希缓存 — 检测手动删改 */
+  private static referencesHashCache = new Map<string, string>();
   private static readonly AUTO_SYNC_DEBOUNCE_MS = 3 * 60 * 1000; // 3 分钟
   // 飞行中 tracker：防止同一文件并发执行两次同步
   private static inFlightSet = new Set<string>();
+  // v6.5.0: diff 飞行锁 — 防止同一文件并发执行 silentDiffCheck
+  private static diffInFlightSet = new Set<string>();
+  // v6.5.0: Window focus 防抖定时器
+  private focusDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(plugin: ZoteroConnector) {
     this.plugin = plugin;
@@ -106,6 +117,8 @@ export class SyncFloatingButton {
     if (this.tweenRafId) { cancelAnimationFrame(this.tweenRafId); this.tweenRafId = null; }
     const w = this.wrapper;
     if (!w) return;
+    w.removeClass("is-idle");
+    w.removeClass("has-updates-ring"); // 进度环接管，清除警告环
     w.addClass("is-progressing");
     w.addClass("is-loading");
     w.removeClass("is-success");
@@ -205,9 +218,12 @@ export class SyncFloatingButton {
     w.removeClass("is-progressing");
     w.removeClass("is-loading");
     w.removeClass("is-success");
-    if (this.ringFill) this.ringFill.style.strokeDashoffset = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+    w.addClass("is-idle");
+    if (this.ringFill) {
+      this.ringFill.style.strokeDashoffset = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+    }
     this.successTimer = null;
-    this.updateBibStatusIcon();
+    this.updateBibStatusIcon(); // 根据当前脏状态决定是否显示警告环
   }
 
   /** 中止进度（错误/取消时调用，直接回到 idle） */
@@ -222,7 +238,10 @@ export class SyncFloatingButton {
     w.removeClass("is-progressing");
     w.removeClass("is-loading");
     w.removeClass("is-success");
-    if (this.ringFill) this.ringFill.style.strokeDashoffset = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+    w.addClass("is-idle");
+    if (this.ringFill) {
+      this.ringFill.style.strokeDashoffset = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+    }
   }
 
   // ── 容器引用 ──
@@ -255,24 +274,76 @@ export class SyncFloatingButton {
     return null;
   }
 
+  // ── v6.5.0 强制状态机物理重置 ──
+
+  /**
+   * 文件切换第一步：同步强制清零，杜绝跨文件状态污染。
+   *
+   * 重置顺序：
+   *   1. 模块级脏标志 → false
+   *   2. HUD DOM 所有状态类名 → 剥离，回归 .is-idle
+   *   3. SVG 环 → 隐藏
+   *   4. 进行中计时器 → 取消
+   *   5. 图标 → file-text
+   *   6. tooltip → 清除
+   */
+  private forceResetState() {
+    // 1. 模块级脏标志归零
+    resetMetadataState(this.plugin.emitter);
+    markBibClean();
+
+    // 2. 停止所有进行中计时器
+    if (this.tweenRafId) { cancelAnimationFrame(this.tweenRafId); this.tweenRafId = null; }
+    if (this.successTimer) { clearTimeout(this.successTimer); this.successTimer = null; }
+    this.isProgressing = false;
+    this.pendingSuccess = false;
+
+    // 3. DOM 状态类名全部剥离，强制回归闲置态
+    const w = this.wrapper;
+    if (w) {
+      w.removeClass('has-updates-ring');
+      w.removeClass('is-progressing');
+      w.removeClass('is-loading');
+      w.removeClass('is-success');
+      w.addClass('is-idle');
+      w.removeAttribute('data-tooltip');
+    }
+
+    // 4. SVG 环归零隐藏
+    if (this.ringFill) {
+      this.ringFill.style.strokeDashoffset = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+    }
+
+    // 5. 图标回归默认
+    if (this.iconWrap) setIcon(this.iconWrap, 'file-text');
+  }
+
   // ── 事件监听 ──
 
   private registerListeners() {
-    // 文件切换
+    // 文件切换 — 开卷时机：metadata脏→自动同步, 引注脏→仅视觉
     this.plugin.registerEvent(
       this.plugin.app.workspace.on('file-open', (file) => {
         if (file && this.isLiteratureNote(file)) {
+          this.forceResetState(); // 先物理清零，杜绝跨文件状态污染
           this.mount();
+          this.silentDiffCheck(file, 'file-open');
         } else {
           this.destroy();
         }
-        // v5.4: 自动同步使用独立触发条件，与悬浮球显示分离
-        if (file && this.plugin.settings.autoSyncOnOpen &&
-            this.matchesTrigger(file, this.plugin.settings.autoSyncTriggers)) {
-          this.tryAutoSync(file);
-        }
       })
     );
+
+    // v6.5.0: Window Focus — 全分支绝不自动同步，纯视觉提示
+    this.plugin.registerDomEvent(window, 'focus', () => {
+      if (this.focusDebounceTimer) clearTimeout(this.focusDebounceTimer);
+      this.focusDebounceTimer = setTimeout(() => {
+        const activeFile = this.plugin.app.workspace.getActiveFile();
+        if (activeFile && this.isLiteratureNote(activeFile)) {
+          this.silentDiffCheck(activeFile, 'focus');
+        }
+      }, 1000);
+    });
 
     // 布局/视图刷新兜底：检测按钮是否被 DOM 重渲染干掉
     this.plugin.registerEvent(
@@ -290,6 +361,13 @@ export class SyncFloatingButton {
     );
     this.plugin.registerEvent(
       this.plugin.emitter.on('bibClean', () => this.updateBibStatusIcon())
+    );
+    // v6.5.0: 条目属性 dirty/clean 状态 → 图标切换
+    this.plugin.registerEvent(
+      this.plugin.emitter.on('metadataDirty', () => this.updateBibStatusIcon())
+    );
+    this.plugin.registerEvent(
+      this.plugin.emitter.on('metadataClean', () => this.updateBibStatusIcon())
     );
 
     // v6.0.0-alpha.5: metadataCache 变更时重新检查挂载（新文件 frontmatter 解析就绪后）
@@ -336,76 +414,103 @@ export class SyncFloatingButton {
   }
 
   /**
-   * v5.2 开卷自动同步引擎。
-   * 满足条件（防抖通过 + citeKey 存在 + 命令勾选）后静默执行同步。
+   * v6.5.0 静默差分检查 — file-open / window-focus 时机的统一入口。
+   *
+   * 维护两个细分脏状态：
+   *   isMetadataOutOfSync — Zotero条目属性 vs 基线（同源比对）
+   *   isBibOutOfSync       — 文档引注签名 vs 缓存基线
+   *
+   * 时机路由：
+   *   file-open + metadata脏 → 自动同步（全动画闭环：紫环→绿环→复原）
+   *   file-open + 引注脏    → 仅视觉警告，绝不自动写入正文
+   *   focus + 任意脏        → 纯视觉提示，绝不自动同步
    */
-  private async tryAutoSync(file: TFile) {
-    const now = Date.now();
-    const lastSync = SyncFloatingButton.autoSyncDebounceMap.get(file.path);
-
-    // 防抖：3 分钟内同文件不重复触发，除非「同步目标」勾选发生了变化
-    if (lastSync && (now - lastSync.time) < SyncFloatingButton.AUTO_SYNC_DEBOUNCE_MS) {
-      const currentCmds = this.plugin.settings.syncTargets || ['metadata'];
-      const lastCmds = lastSync.commands || [];
-      if (currentCmds.slice().sort().join(',') === lastCmds.slice().sort().join(',')) {
-        return;
-      }
-      // 同步目标变了，允许重新同步
-    }
-
-    // 飞行中保护：同一文件已有同步在执行中
-    if (SyncFloatingButton.inFlightSet.has(file.path)) {
+  private async silentDiffCheck(file: TFile, trigger: 'file-open' | 'focus') {
+    // v6.5.0: 互斥锁 — 防止同一文件并发 diff 导致假阳性
+    if (SyncFloatingButton.diffInFlightSet.has(file.path)) {
       return;
     }
-
-    const citeKey = this.extractCiteKeyFromFile(file);
-    if (!citeKey) return;
-
-    // 仅静默处理 metadata / annotations，其他目标不参与自动同步
-    const targets = this.plugin.settings.syncTargets || ['metadata'];
-    if (!targets.includes('metadata') && !targets.includes('annotations')) {
-      return;
-    }
-
-    // ★ v6.3.0: 差分检测 — 仅当 Zotero 数据真正变化时才触发同步
-    const currentHash = await this.computeMetadataHash(citeKey);
-    if (currentHash) {
-      const storedHash = SyncFloatingButton.metadataHashCache.get(file.path);
-      if (storedHash === currentHash) {
-        // 数据未变化，跳过同步
-        SyncFloatingButton.autoSyncDebounceMap.set(file.path, {
-          time: Date.now(),
-          commands: [...targets],
-        });
-        return;
-      }
-    }
-
-    // ★ v6.3.0-alpha.1: HUD 全生命周期进度
-    this.showProgress();
-    this.setProgress(5);
-
-    SyncFloatingButton.inFlightSet.add(file.path);
+    SyncFloatingButton.diffInFlightSet.add(file.path);
     try {
-      this.setProgress(25);
-      await this.plugin.runSilentAutoSync(citeKey, 1, file.path);
-      this.setProgress(85);
-      SyncFloatingButton.autoSyncDebounceMap.set(file.path, {
-        time: Date.now(),
-        commands: [...targets],
-      });
-      // 缓存新哈希值
+      const citeKey = this.extractCiteKeyFromFile(file);
+      if (!citeKey) return;
+
+      // ── 元数据检测：Zotero-now vs Zotero-then（同源比对，杜绝假阳性）──
+      let metadataDirty = false;
+      const currentHash = await this.computeMetadataHash(citeKey, file);
       if (currentHash) {
-        SyncFloatingButton.metadataHashCache.set(file.path, currentHash);
+        const storedHash = metadataSyncHashCache.get(file.path);
+        if (storedHash === undefined) {
+          markMetadataSynced(file.path, currentHash, this.plugin.emitter);
+        } else if (storedHash !== currentHash) {
+          checkMetadataDirty(file.path, currentHash, this.plugin.emitter, true);
+          metadataDirty = true;
+        } else {
+          markMetadataSynced(file.path, currentHash, this.plugin.emitter);
+        }
       }
-      this.setProgress(100);
-      // 补间引擎在 visual=100 时自动触发 triggerSuccess()
+
+      // ── 引注检测：正文citekey vs 参考文献区块三层严格对账 ──
+	      let citationDirty = false;
+	      try {
+	        // 优先从活跃编辑器视图读取内容（与基线来源一致），杜绝 cachedRead 滞后
+	        const editorView = getActiveEditorView();
+	        const editorContent = editorView?.state.doc.toString();
+	        const docContent = editorContent ?? await this.plugin.app.vault.read(file);
+	        const bodyKeys = await this.extractBodyCiteKeys(file, docContent);
+	        const bodySig = bodyKeys.join('|');
+	        const refCount = await this.countReferenceEntries(file, docContent);
+
+	        // ── 提前计算 refHash（提纯版）与缓存基线 ──
+	        const refHash = await this.computeReferencesHash(file, docContent);
+	        const storedSig = SyncFloatingButton.citekeySignatureCache.get(file.path);
+	        const storedRefHash = SyncFloatingButton.referencesHashCache.get(file.path);
+
+        // ── 终极断言：提纯签名与提纯哈希同时匹配 → 绝对 clean ──
+        // 无论数量是否对等，只要纯 citekey 签名不变 + 纯条目哈希不变，
+        // 就证明用户未增删引注、未改参考文献，绝对禁止亮橙灯。
+        if (storedSig !== undefined && storedRefHash !== undefined &&
+            storedSig === bodySig && storedRefHash === refHash) {
+          markBibClean();
+        } else if (bodyKeys.length === 0 && refCount === 0) {
+          // 无引注无参考文献 → 建立空基线
+          markBibClean();
+          SyncFloatingButton.citekeySignatureCache.set(file.path, '');
+          if (refHash) SyncFloatingButton.referencesHashCache.set(file.path, refHash);
+        } else if (bodyKeys.length !== refCount) {
+          // 第1层：数量不对等 → dirty
+          markBibDirty();
+          citationDirty = true;
+        } else if (storedSig !== undefined && storedSig !== bodySig) {
+          // 第2层：citekey 签名变更 → dirty
+          markBibDirty();
+          citationDirty = true;
+        } else if (storedRefHash === undefined) {
+          // 首次：存储基线
+          if (refHash) SyncFloatingButton.referencesHashCache.set(file.path, refHash);
+          SyncFloatingButton.citekeySignatureCache.set(file.path, bodySig);
+          markBibClean();
+        } else if (storedRefHash !== refHash) {
+          // 区块被修改 → dirty
+          markBibDirty();
+          citationDirty = true;
+        } else {
+          markBibClean();
+        }
+      } catch { /* 引注解析失败，跳过 */ }
+
+      // ── 时机路由 ──
+      if (trigger === 'file-open' && metadataDirty && !citationDirty) {
+        // 仅元数据脏（引注clean）→ 安全自动同步，不碰正文
+        await this.runSmartSync(file);
+      } else if (metadataDirty || citationDirty) {
+        // 引注脏 或 两者皆脏 → 绝对拦截，纯视觉挂起等待手动操作
+        this.updateBibStatusIcon();
+      }
     } catch (e) {
-      console.error('[AutoSync]', e);
-      this.hideProgress();
-      new Notice(t('notice.autoSyncFailed'), 3000);
+      console.error("[HUD Debug] silentDiffCheck 异常:", e);
     } finally {
-      SyncFloatingButton.inFlightSet.delete(file.path);
+      SyncFloatingButton.diffInFlightSet.delete(file.path);
     }
   }
 
@@ -438,8 +543,8 @@ export class SyncFloatingButton {
 
     this.containerEl = container;
 
-    // v6.3.0: 进度环 wrapper
-    const wrapper = container.createDiv('sync-floating-wrapper');
+    // v6.3.0: 进度环 wrapper — 默认 .is-idle 闲置态
+    const wrapper = container.createDiv('sync-floating-wrapper is-idle');
     this.wrapper = wrapper;
 
     const btn = wrapper.createDiv('sync-floating-button');
@@ -509,18 +614,72 @@ export class SyncFloatingButton {
     // v7.1: 挂载时根据当前 dirty 状态设置图标
     this.updateBibStatusIcon();
 
-    // 恢复后做一次垂直边界修正
-    requestAnimationFrame(() => this.clampVerticalPosition());
+    // 恢复后做一次垂直边界修正 + 方位类名
+    requestAnimationFrame(() => {
+      this.clampVerticalPosition();
+      this.updateEdgeClass();
+    });
   }
 
-  /** v7.1: 根据 isBibOutOfSync 切换图标 — 脏 file-pen / 干净 file-text */
+  /**
+   * v6.5.0: 双重状态图标 — 统一使用 file-pen 作为警告态。
+   *   isBibOutOfSync      → file-pen + 橙色 SVG 全圈环
+   *   isMetadataOutOfSync → file-pen + 橙色 SVG 全圈环
+   *   两者都 dirty         → file-pen + 橙色 SVG 全圈环
+   *   两者都 clean         → file-text (.is-idle 闲置态，环隐藏)
+   *
+   * 警告态复用 SVG 环形进度条的 <circle> 元素：
+   *   stroke-dashoffset=0 全圈填充，stroke=var(--text-warning) 橙色，
+   *   与加载紫环/成功绿环 stroke-width 像素级等宽（4px）。
+   */
   private updateBibStatusIcon() {
     const wrap = this.iconWrap;
     if (!wrap) return;
-    if (isBibOutOfSync) {
+    const dirty = isBibOutOfSync || isMetadataOutOfSync;
+    if (dirty) {
       setIcon(wrap, 'file-pen');
+      this.applyWarningRing(true);
     } else {
       setIcon(wrap, 'file-text');
+      if (!this.isProgressing) this.applyWarningRing(false);
+    }
+    this.updateTooltip();
+  }
+
+  /** 显示/隐藏 SVG 橙色警告环（复用进度环 <circle>，stroke-width 等宽） */
+  private applyWarningRing(show: boolean) {
+    const w = this.wrapper;
+    if (!w) return;
+    if (show) {
+      w.addClass('has-updates-ring');
+      if (this.ringTrack) {
+        this.ringTrack.style.strokeDasharray = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+        this.ringTrack.style.strokeDashoffset = '0';
+      }
+      if (this.ringFill) {
+        this.ringFill.style.strokeDasharray = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+        this.ringFill.style.strokeDashoffset = '0';
+      }
+    } else {
+      w.removeClass('has-updates-ring');
+      if (this.ringFill) {
+        this.ringFill.style.strokeDashoffset = String(SyncFloatingButton.RING_CIRCUMFERENCE);
+      }
+    }
+  }
+
+  /** v6.5.0: 纯 CSS 零延迟 tooltip — data-tooltip 驱动 ::after 伪元素即触即发 */
+  private updateTooltip() {
+    const w = this.wrapper;
+    if (!w) return;
+    if (isBibOutOfSync && isMetadataOutOfSync) {
+      w.setAttribute('data-tooltip', '文献条目与参考文献需要更新');
+    } else if (isBibOutOfSync) {
+      w.setAttribute('data-tooltip', '参考文献需要更新');
+    } else if (isMetadataOutOfSync) {
+      w.setAttribute('data-tooltip', '文献条目需要更新');
+    } else {
+      w.removeAttribute('data-tooltip');
     }
   }
 
@@ -542,6 +701,8 @@ export class SyncFloatingButton {
       this.ringFill = null;
       this.cleanup = null;
       this.containerEl = null;
+      // v6.5.0: 文件关闭时重置 metadata dirty 状态
+      resetMetadataState(this.plugin.emitter);
     }
   }
 
@@ -553,7 +714,6 @@ export class SyncFloatingButton {
       'height: 50px',
       'border-radius: 50%',
       'background: var(--background-secondary)',
-      'border: 1px solid var(--background-modifier-border)',
       'display: flex',
       'align-items: center',
       'justify-content: center',
@@ -676,6 +836,24 @@ export class SyncFloatingButton {
 
   // ── v6.3.0 边缘吸附（wrapper 驱动）──
 
+  /** 根据当前坐标判断左右方位并挂载 .is-on-left / .is-on-right 类名 */
+  private updateEdgeClass() {
+    const wrapper = this.wrapper;
+    const container = this.containerEl;
+    if (!wrapper || !container) return;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const centerX = wrapperRect.left - containerRect.left + wrapperRect.width / 2;
+    const isLeft = centerX < containerRect.width / 2;
+    if (isLeft) {
+      wrapper.addClass('is-on-left');
+      wrapper.removeClass('is-on-right');
+    } else {
+      wrapper.addClass('is-on-right');
+      wrapper.removeClass('is-on-left');
+    }
+  }
+
   private snapToEdge() {
     const wrapper = this.wrapper;
     if (!wrapper) return;
@@ -699,6 +877,9 @@ export class SyncFloatingButton {
       wrapper.style.left = 'auto';
       wrapper.style.right = `${this.SNAP_MARGIN}px`;
     }
+
+    // 更新方位类名 → tooltip 自适应方向
+    this.updateEdgeClass();
 
     // 垂直边界修正
     this.clampVerticalPosition();
@@ -763,7 +944,7 @@ export class SyncFloatingButton {
       'z-index: 99998',
       'min-width: 180px',
       'background: var(--background-primary)',
-      'border: 1px solid var(--background-modifier-border)',
+      'border: none',
       'border-radius: 8px',
       'box-shadow: 0 8px 32px rgba(0,0,0,0.18)',
       'padding: 4px 0',
@@ -775,8 +956,18 @@ export class SyncFloatingButton {
       'transition: opacity 0.15s ease, transform 0.15s ease',
     ].join(';');
 
+    // v6.5.0: 根据脏状态决定推荐高亮
+    const highlightMetadata = isMetadataOutOfSync;
+    const highlightBib = isBibOutOfSync;
+
     for (const cmdId of commands) {
-      const item = menu.createDiv('sync-floating-menu-item');
+      const isRecommended =
+        (cmdId === 'zdc-smart-sync' && highlightMetadata) ||
+        (cmdId === 'update-bibliography' && highlightBib);
+
+      const item = menu.createDiv(
+        `sync-floating-menu-item${isRecommended ? ' is-recommended-action' : ''}`,
+      );
       item.setText(this.getCommandLabel(cmdId));
       item.style.cssText = [
         'padding: 10px 18px',
@@ -891,22 +1082,54 @@ export class SyncFloatingButton {
     }
   }
 
-  /** v6.0: 根据 syncTargets 对当前文件执行智能同步 */
+  /**
+   * v6.5.0: 同步完成后刷新引注缓存基线。
+   *
+   * @param preReadContent 编辑器路径传入 view.state.doc.toString()，
+   *   绕过一切文件 I/O（因 view.dispatch 后 Obsidian 异步落盘有延迟，
+   *   vault.read() 可能读到旧内容）。不传时回退到 vault.read()。
+   */
+  async refreshCitationCachesAfterSync(file: TFile, preReadContent?: string) {
+    const freshContent = preReadContent ?? await this.plugin.app.vault.read(file);
+    const sig = await this.computeCiteKeySignature(file, freshContent);
+    SyncFloatingButton.citekeySignatureCache.set(file.path, sig);
+    const refHash = await this.computeReferencesHash(file, freshContent);
+    if (refHash) SyncFloatingButton.referencesHashCache.set(file.path, refHash);
+    markBibClean();
+    try { this.plugin.emitter.trigger('bibClean'); } catch { /* 静默 */ }
+  }
+
+  /** v6.5.0: 手动智能同步 — 无条件绕过签名拦截器，执行完整流程 */
   private async runSmartSync(file: TFile) {
     const citeKey = this.extractCiteKeyFromFile(file);
     if (!citeKey) return;
 
+    // v6.5.0: 写入守卫 — 发起同步时立刻锁定目标文件路径，杜绝跨文件覆盖
+    const targetPath = file.path;
+
     this.showProgress();
     this.setProgress(5);
-    SyncFloatingButton.inFlightSet.add(file.path);
+    SyncFloatingButton.inFlightSet.add(targetPath);
     try {
       this.setProgress(25);
-      await this.plugin.runSilentAutoSync(citeKey, 1, file.path);
-      this.setProgress(85);
-      const currentHash = await this.computeMetadataHash(citeKey);
-      if (currentHash) {
-        SyncFloatingButton.metadataHashCache.set(file.path, currentHash);
+      await this.plugin.runSilentAutoSync(citeKey, 1, targetPath);
+
+      // 写入守卫：若用户已切走，放弃后续状态更新，防止跨文件缓存污染
+      const activePath = this.plugin.app.workspace.getActiveFile()?.path;
+      if (activePath !== targetPath) {
+        console.warn('[HUD Guard] 文件已切换，放弃后台状态更新，防止跨文件污染！');
+        this.hideProgress();
+        return;
       }
+
+      this.setProgress(85);
+      const currentHash = await this.computeMetadataHash(citeKey, file);
+      if (currentHash) {
+        metadataSyncHashCache.set(targetPath, currentHash);
+        markMetadataSynced(targetPath, currentHash, this.plugin.emitter);
+      }
+      // v6.5.0: 重新扫描正文并强行覆盖缓存基线，终结假阳性
+      await this.refreshCitationCachesAfterSync(file);
       this.setProgress(100);
       // 补间引擎在 visual=100 时自动触发 triggerSuccess()
     } catch (e) {
@@ -919,14 +1142,26 @@ export class SyncFloatingButton {
   }
 
   /** v6.3.0: 计算 Zotero 条目元数据哈希，用于差分同步 */
-  private async computeMetadataHash(citeKey: string): Promise<string | null> {
+  private async computeMetadataHash(
+    citeKey: string,
+    file?: TFile,
+  ): Promise<string | null> {
     try {
+      // 从文件 frontmatter 或默认值获取 libraryID
+      let libraryID = 1;
+      if (file) {
+        const cache = this.plugin.app.metadataCache.getFileCache(file);
+        const fmLibrary = cache?.frontmatter?.libraryID;
+        if (typeof fmLibrary === 'number') libraryID = fmLibrary;
+      }
+      const citeKeyObj = { key: citeKey, library: libraryID };
+
       const database = { database: this.plugin.settings.database, port: this.plugin.settings.port };
-      const citeKeyObj = await getCiteKeyFromAny(citeKey, database);
-      if (!citeKeyObj) return null;
-      const items = await getItemJSONFromCiteKeys([citeKeyObj], database, citeKeyObj.library, true);
+      const items = await getItemJSONFromCiteKeys([citeKeyObj], database, libraryID, true);
       if (!items || !items.length) return null;
       const item = items[0];
+      // v6.5.0: 扩展字段 — 覆盖标题、摘要、DOI、URL、日期、作者、编辑、
+      //   期刊、标签（阅读状态/优先级/类型）、文库分类、extra、版本
       const fields = [
         item.title ?? "",
         item.abstract ?? "",
@@ -936,8 +1171,16 @@ export class SyncFloatingButton {
         item.issued?.["date-parts"]?.flat()?.join("-") ?? "",
         JSON.stringify(item.author ?? []),
         JSON.stringify(item.editor ?? []),
+        item.publicationTitle ?? "",
+        item.journalAbbreviation ?? "",
         item.version ?? "",
         item.status ?? "",
+        // tags — 包含阅读状态、优先级、文献类型等关键字段
+        JSON.stringify((item.tags ?? []).map((t: any) => (typeof t === 'string' ? t : (t.tag ?? t)))),
+        // collections — 文库分类路径
+        JSON.stringify((item.collections ?? []).map((c: any) => (typeof c === 'string' ? c : (c.fullPath ?? c.name ?? c)))),
+        // extra — 包含 titleTranslation 等附加字段
+        item.extra ?? "",
       ];
       const joined = fields.join("|");
       let hash = 0;
@@ -947,7 +1190,8 @@ export class SyncFloatingButton {
         hash |= 0;
       }
       return String(hash);
-    } catch {
+    } catch (e) {
+      console.error("[HUD Debug] computeMetadataHash 异常:", e);
       return null;
     }
   }
@@ -958,5 +1202,71 @@ export class SyncFloatingButton {
     if (citeKey) return citeKey;
 
     return file.basename;
+  }
+
+  /** v6.5.0: 从文档正文提取去重排序后的 citekey 数组 */
+  private async extractBodyCiteKeys(file: TFile, content?: string): Promise<string[]> {
+    const text = content ?? await this.plugin.app.vault.cachedRead(file);
+    const keys: string[] = [];
+    CITEKEY_SIG_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = CITEKEY_SIG_RE.exec(text)) !== null) {
+      // 拆分多引注 [@key1; @key2]，过滤空白，去除 @ 前缀
+      const rawKeys = match[1]
+        .split(';')
+        .map(s => s.trim().replace(/^@/, ''))
+        .filter(Boolean);
+	      keys.push(...rawKeys);
+	    }
+	    return [...new Set(keys)].sort();
+	  }
+
+	  /** v6.5.0: 统计参考文献区块中的条目数（匹配 ^\d+\.\s 编号行）*/
+	  private async countReferenceEntries(file: TFile, content?: string): Promise<number> {
+	    const text = content ?? await this.plugin.app.vault.cachedRead(file);
+	    const zone = this.findReferencesZone(text);
+	    if (!zone) return 0;
+	    const section = text.slice(zone.from, zone.to);
+	    let count = 0;
+    const re = /^\d+\.\s/gm;
+	    while (re.exec(section) !== null) count++;
+	    return count;
+	  }
+
+  /** v6.5.0: 计算参考文献区块内容哈希 — 提纯：剔除所有空格/换行/不可见字符 */
+  private async computeReferencesHash(file: TFile, content?: string): Promise<string | null> {
+    const text = content ?? await this.plugin.app.vault.cachedRead(file);
+    const zone = this.findReferencesZone(text);
+    if (!zone) return null;
+    // 暴力清理：剔除一切空白与不可见字符，仅对纯文本条目计算哈希
+    const section = text.slice(zone.from, zone.to).replace(/\s+/g, '');
+    if (!section) return null;
+    let hash = 0;
+    for (let i = 0; i < section.length; i++) {
+      hash = ((hash << 5) - hash) + section.charCodeAt(i);
+      hash |= 0;
+    }
+    return String(hash);
+  }
+
+  /** v6.5.0: 定位参考文献标题在文档中的安全区 */
+  private findReferencesZone(content: string): { from: number; to: number } | null {
+    // 匹配 # 参考文献 或 ## 参考文献 等 Markdown 标题
+    const headingRe = /^#{1,3}\s+参考文献\s*$/m;
+    const m = headingRe.exec(content);
+    if (!m) return null;
+    const headingLevel = (m[0].match(/^#+/)!)[0].length;
+    const zoneStart = m.index + m[0].length;
+    const rest = content.slice(zoneStart);
+    // 找到下一个同级或更高级标题作为终点
+    const nextRe = new RegExp(`^#{1,${headingLevel}}\\s`, 'm');
+    const nextM = nextRe.exec(rest);
+    const zoneEnd = nextM ? zoneStart + nextM.index : content.length;
+    return { from: zoneStart, to: zoneEnd };
+  }
+
+  private async computeCiteKeySignature(file: TFile, content?: string): Promise<string> {
+    const keys = await this.extractBodyCiteKeys(file, content);
+    return keys.join('|');
   }
 }

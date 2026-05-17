@@ -628,25 +628,94 @@
 /* HUD 根容器 — 锁死 50×50 严格同心几何 */
 .sync-floating-wrapper {
     position: absolute;
-    z-index: 99;
+    z-index: 99999;
     width: 50px;
     height: 50px;
     border-radius: 50%;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none;
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+                box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+                background-color 0.3s ease;
 }
 
-/* ── Idle Hover: 3D 抬升 + 紫色同心光环 + 图标转紫 ── */
+/* ── 防御性铲除：禁止 ::before 伪元素残留造成孤立横线 ── */
+.sync-floating-wrapper::before,
+.sync-floating-button::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* ── Idle 闲置态：无阴影、无边框、极简暗色圆 ── */
+.sync-floating-wrapper.is-idle {
+    box-shadow: none;
+}
+
+/* ── has-updates 警告态：复用 SVG 同心 <circle> 全圈橙色环 ──
+   stroke-dashoffset=0（满圈）、stroke=var(--text-warning)、
+   与加载紫环/成功绿环 stroke-width 像素级等宽（4px）。── */
+.sync-floating-wrapper.is-idle.has-updates-ring .sync-progress-ring {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease-out,
+                visibility 0s linear 0s;
+}
+.sync-floating-wrapper.is-idle.has-updates-ring .sync-ring-fill {
+    stroke: var(--text-warning) !important;
+}
+
+/* ── Idle Hover: 3D 抬升 + 立体阴影（纯圆无边框）── */
 .sync-floating-wrapper:not(.is-progressing):hover {
     transform: translateY(-2px);
     box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.2),
-        0 8px 24px rgba(0, 0, 0, 0.15),
-        0 0 0 2px var(--interactive-accent);
+        0 8px 24px rgba(0, 0, 0, 0.15);
 }
-.sync-floating-wrapper:not(.is-progressing):hover .sync-icon-wrap {
+
+/* ── Hover 图标转紫（仅 clean 闲置态；警告态保持橙色不动）── */
+.sync-floating-wrapper:not(.is-progressing):not(.has-updates-ring):hover .sync-icon-wrap {
     color: var(--interactive-accent) !important;
+}
+
+/* ── 警告态：中心 Icon 同步橙色，消除色彩层叠冲突 ── */
+.sync-floating-wrapper.has-updates-ring .sync-icon-wrap {
+    color: var(--text-warning) !important;
+}
+
+/* ── 零延迟 Tooltip：纯 CSS ::after 伪元素，即触即发 ──
+   共用样式，方位由 .is-on-left / .is-on-right 控制弹出方向 */
+.sync-floating-wrapper[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 50%;
+    white-space: nowrap;
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 99999;
+    pointer-events: none;
+    transition: opacity 0s;
+    opacity: 1;
+}
+
+/* ── 靠左：向右安全区弹出 ── */
+.sync-floating-wrapper.is-on-left[data-tooltip]:hover::after {
+    left: calc(100% + 12px);
+    right: auto;
+    transform: translateY(-50%);
+}
+
+/* ── 靠右：向左正文区弹出 ── */
+.sync-floating-wrapper.is-on-right[data-tooltip]:hover::after {
+    right: calc(100% + 12px);
+    left: auto;
+    transform: translateY(-50%);
 }
 
 /* ── 进度进行中/成功：显示SVG进度环 ── */
@@ -660,7 +729,11 @@
 /* ── 悬浮球按钮 — 三层绝对定位的定位锚点 ── */
 .sync-floating-button {
     position: relative;
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 50%;
+    overflow: hidden;
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+                box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+                background-color 0.3s ease;
 }
 
 /* ── SVG 进度环容器 ── */
@@ -680,15 +753,19 @@
     pointer-events: none;
 }
 
-/* ── SVG 轨道环（灰色底色）── */
+/* ── SVG 轨道环（灰色底色、严格扁平、等宽 stroke）── */
 .sync-ring-track {
     stroke: color-mix(in srgb, var(--text-muted) 18%, transparent);
+    box-shadow: none !important;
+    filter: none !important;
 }
 
-/* ── SVG 填充环（紫色、扁平、丝滑颜色过渡）── */
+/* ── SVG 填充环（紫色、严格扁平、丝滑颜色过渡）── */
 .sync-ring-fill {
     stroke: var(--interactive-accent);
-    transition: stroke 0.4s ease-out;
+    transition: stroke 0.3s ease-out;
+    box-shadow: none !important;
+    filter: none !important;
 }
 
 /* ── 成功态：填充环丝滑变绿 ── */
@@ -776,5 +853,12 @@
                 visibility 0s linear 0s;
 }
 
+/* ── 弹出菜单：推荐操作高亮（紫色加粗 + 微发光）── */
+.sync-floating-menu-item.is-recommended-action {
+    color: var(--interactive-accent);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+}
 
 
